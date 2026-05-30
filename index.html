@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Emre 계산기</title>
+
+  <!-- PWA 메타태그 -->
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Emre 계산기"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="theme-color" content="#0a1628"/>
+
+  <!-- PWA 아이콘 (SVG 인라인) -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230a1628'/><text y='.9em' font-size='80' x='10'>🌍</text></svg>"/>
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%230a1628'/><text y='.9em' font-size='80' x='10'>🌍</text></svg>"/>
+
+  <!-- PWA Manifest 인라인 -->
+  <link rel="manifest" href="data:application/json,%7B%22name%22%3A%22Emre%20%EA%B3%84%EC%82%B0%EA%B8%B0%22%2C%22short_name%22%3A%22Emre%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%230a1628%22%2C%22theme_color%22%3A%22%230a1628%22%2C%22icons%22%3A%5B%5D%7D"/>
+
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+
+  <style>
+    *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+    body{margin:0;padding:0;background:#0a1628;font-family:'Noto Sans KR',sans-serif;color:#f1f5f9;}
+    input,button,textarea{font-family:'Noto Sans KR',sans-serif;}
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;}
+    input[type=date]::-webkit-calendar-picker-indicator{filter:invert(1);opacity:0.5;}
+    ::-webkit-scrollbar{display:none;}
+
+    /* 접이식 애니메이션 */
+    .accordion-body{overflow:hidden;transition:max-height 0.28s ease;}
+    .accordion-body.closed{max-height:0 !important;}
+
+    /* Toast */
+    #toast{
+      position:fixed;top:20px;left:50%;transform:translateX(-50%);
+      padding:10px 22px;border-radius:30px;font-size:13px;font-weight:600;
+      z-index:9999;box-shadow:0 4px 20px rgba(0,0,0,.4);
+      white-space:nowrap;display:none;transition:opacity 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+<div id="root"></div>
+<div id="toast"></div>
+
+<!-- React + Babel CDN -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback } = React;
+// 업데이트해도 데이터 유지: 구버전 키에서 자동 마이그레이션
+const STORAGE_KEY = "emre-records";
+const LEGACY_KEYS = ["emre-calc-v1","guide-income-records-v2","guide-income-records"];
+function loadRecords() {
+  try { const d=localStorage.getItem(STORAGE_KEY); if(d) return JSON.parse(d); } catch{}
+  for(const key of LEGACY_KEYS){
+    try {
+      const d=localStorage.getItem(key);
+      if(d){ const parsed=JSON.parse(d); if(parsed&&parsed.length>0){
+        localStorage.setItem(STORAGE_KEY,d);
+        localStorage.removeItem(key);
+        return parsed;
+      }}
+    } catch{}
+  }
+  return [];
+}
+
+// ── 유틸 ──
+function fmt(n, currency="EUR") {
+  if (currency==="EUR") return `€${Number(n||0).toLocaleString("de-DE",{minimumFractionDigits:0,maximumFractionDigits:0})}`;
+  return `₩${Number(n||0).toLocaleString("ko-KR")}`;
+}
+function fmtDate(d) {
+  if(!d) return "";
+  const [y,m,day]=d.split("-"); return `${y}.${m}.${day}`;
+}
+function monthKey(d){return d?d.slice(0,7):"";}
+function pf(v){return parseFloat(v||0);}
+function today(){return new Date().toISOString().slice(0,10);}
+
+// ── 항목 정의 ──
+// rate: 인당 단가(EUR), null이면 직접 금액 입력
+const OPTION_ITEMS=[
+  {key:"balloon",  label:"🎈 열기구",    rate:30, paxKey:"balloon_pax"},
+  {key:"jeep",     label:"🚙 지프 사파리", rate:20, paxKey:"jeep_pax"},
+  {key:"kart",     label:"🏎 카트",      rate:10, paxKey:"kart_pax"},
+  {key:"cruise",   label:"⛵ 유람선",    rate:10, paxKey:"cruise_pax"},
+  {key:"optOther", label:"➕ 기타",      rate:null},
+];
+const SHOPPING_ITEMS=[
+  {key:"carpet",    label:"🪄 카페트"},
+  {key:"turquoise", label:"💎 터키석"},
+  {key:"cotton",    label:"👕 면제품"},
+  {key:"leather",   label:"🧥 양가죽"},
+  {key:"lokum",     label:"🍬 로쿰"},
+];
+const EXPENSE_ITEMS=[
+  {key:"snack",    label:"🍿 주전부리"},
+  {key:"drink",    label:"🥤 음료"},
+  {key:"expOther", label:"➕ 기타"},
+];
+
+function emptyForm(){
+  return {date:today(),tourName:"",pax:"",dailyWage:"",
+    balloon:"",balloon_pax:"",
+    jeep:"",jeep_pax:"",
+    kart:"",kart_pax:"",
+    cruise:"",cruise_pax:"",
+    optOther:"",
+    carpet:"",turquoise:"",cotton:"",leather:"",lokum:"",
+    tip:"",otherIncome:"",
+    snack:"",drink:"",expOther:"",memo:""};
+}
+function sumKeys(r,keys){return keys.reduce((s,k)=>s+pf(r[k]),0);}
+function totalOption(r){return sumKeys(r,OPTION_ITEMS.map(i=>i.key));}
+function totalShopping(r){return sumKeys(r,SHOPPING_ITEMS.map(i=>i.key));}
+function totalTipOther(r){return pf(r.tip)+pf(r.otherIncome);}
+function totalExpense(r){return sumKeys(r,EXPENSE_ITEMS.map(i=>i.key));}
+function totalIncome(r){return pf(r.dailyWage)+totalOption(r)+totalShopping(r)+totalTipOther(r);}
+function netEur(r){return totalIncome(r)-totalExpense(r);}
+
+// ── Toast ──
+function showToast(msg,type="ok"){
+  const el=document.getElementById("toast");
+  el.textContent=msg;
+  el.style.background=type==="err"?"#ef4444":"#10b981";
+  el.style.color="#fff";
+  el.style.display="block";
+  el.style.opacity="1";
+  setTimeout(()=>{el.style.opacity="0"; setTimeout(()=>el.style.display="none",300);},2000);
+}
+
+// ── 접이식 섹션 ──
+function Accordion({title,total,color,accentColor,badge,children}){
+  const [open,setOpen]=useState(false);
+  return (
+    <div style={{marginBottom:12}}>
+      <div onClick={()=>setOpen(v=>!v)} style={{
+        display:"flex",justifyContent:"space-between",alignItems:"center",
+        background:open?"#1a2942":"#1e293b",
+        border:`1px solid ${open?accentColor||"#334155":"#334155"}`,
+        borderRadius:open?"12px 12px 0 0":"12px",
+        padding:"12px 14px",cursor:"pointer",transition:"all 0.2s",
+      }}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#f1f5f9"}}>{title}</span>
+          {badge&&<span style={{fontSize:10,background:"rgba(255,255,255,0.07)",borderRadius:4,padding:"1px 6px",color:"#64748b"}}>{badge}</span>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <span style={{fontSize:14,fontWeight:800,color:total>0?color:"#475569"}}>{total>0?fmt(total):"—"}</span>
+          <span style={{fontSize:13,color:"#475569",display:"inline-block",transition:"transform 0.2s",transform:open?"rotate(180deg)":"rotate(0deg)"}}>▾</span>
+        </div>
+      </div>
+      {open&&(
+        <div style={{background:"#131f2e",border:`1px solid ${accentColor||"#334155"}`,borderTop:"1px solid #1e3a5f",borderRadius:"0 0 12px 12px",padding:"14px 14px 10px"}}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 입력 행 ──
+function InputRow({label,value,onChange,color}){
+  return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+      <label style={{fontSize:12,color:color||"#94a3b8",fontWeight:600,minWidth:115}}>{label}</label>
+      <div style={{display:"flex",alignItems:"center",gap:4}}>
+        <span style={{color:"#475569",fontSize:13}}>€</span>
+        <input type="number" inputMode="decimal" placeholder="0" value={value}
+          onChange={e=>onChange(e.target.value)}
+          style={{width:88,background:"#1e293b",border:`1px solid ${pf(value)>0?(color||"#334155"):"#2d3748"}`,
+            borderRadius:8,padding:"8px 10px",color:"#f1f5f9",fontSize:13,outline:"none",textAlign:"right"}}/>
+      </div>
+    </div>
+  );
+}
+
+// ── 상세 접이식 ──
+function DetailAccordion({title,total,items,rec,eurRate,color,accentColor}){
+  const [open,setOpen]=useState(false);
+  const hasDetail=items.some(i=>pf(rec[i.key])>0);
+  return (
+    <div style={{borderBottom:"1px solid #1e293b"}}>
+      <div onClick={()=>hasDetail&&setOpen(v=>!v)}
+        style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 0",cursor:hasDetail?"pointer":"default"}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{fontSize:13,color:"#64748b"}}>{title}</span>
+          {hasDetail&&<span style={{fontSize:10,color:"#475569",background:"#1e293b",borderRadius:4,padding:"1px 5px"}}>{open?"접기 ▴":"상세 ▾"}</span>}
+        </div>
+        <div style={{textAlign:"right"}}>
+          <div style={{fontSize:13,color:total>0?color:"#475569",fontWeight:700}}>{fmt(total)}</div>
+          {eurRate&&total>0&&<div style={{fontSize:10,color:"#64748b"}}>{fmt(total*eurRate,"KRW")}</div>}
+        </div>
+      </div>
+      {open&&hasDetail&&(
+        <div style={{background:"#131f2e",borderRadius:10,padding:"10px 14px",marginBottom:10,border:`1px solid ${accentColor||"#334155"}`}}>
+          {items.map(item=>pf(rec[item.key])>0?(
+            <div key={item.key} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #1e293b"}}>
+              <span style={{fontSize:12,color:"#94a3b8"}}>{item.label}</span>
+              <span style={{fontSize:12,color,fontWeight:600}}>{fmt(rec[item.key])}</span>
+            </div>
+          ):null)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── 바차트 ──
+function BarChart({data}){
+  const max=Math.max(...data.map(d=>d.value),1);
+  return (
+    <div style={{display:"flex",alignItems:"flex-end",gap:6,height:90,padding:"0 4px"}}>
+      {data.map((d,i)=>(
+        <div key={i} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:4}}>
+          <div style={{width:"100%",background:"#f59e0b",borderRadius:"4px 4px 0 0",height:`${(d.value/max)*70}px`,minHeight:d.value>0?4:0,opacity:0.85}}/>
+          <span style={{fontSize:9,color:"#9ca3af",whiteSpace:"nowrap"}}>{d.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ════════════════════════════════
+// ── MAIN APP ──
+// ════════════════════════════════
+function App(){
+  const [records,setRecords]=useState([]);
+  const [eurRate,setEurRate]=useState(null);
+  const [rateLoading,setRateLoading]=useState(false);
+  const [view,setView]=useState("list");
+  const [editId,setEditId]=useState(null);
+  const [filterMonth,setFilterMonth]=useState("");
+  const [form,setForm]=useState(emptyForm());
+  const [detailId,setDetailId]=useState(null);
+
+  useEffect(()=>{
+    setRecords(loadRecords());
+    fetchRate();
+  },[]);
+  useEffect(()=>{try{localStorage.setItem(STORAGE_KEY,JSON.stringify(records));}catch{}},[records]);
+
+  async function fetchRate(){
+    setRateLoading(true);
+    try{
+      // fawazahmed0/currency-api — 키 불필요, KRW 지원, rate limit 없음
+      const res=await fetch("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/eur.json");
+      const data=await res.json();
+      const rate=data?.eur?.krw;
+      if(rate&&rate>100) setEurRate(Math.round(rate));
+    }catch{
+      // 백업 URL
+      try{
+        const res=await fetch("https://latest.currency-api.pages.dev/v1/currencies/eur.json");
+        const data=await res.json();
+        const rate=data?.eur?.krw;
+        if(rate&&rate>100) setEurRate(Math.round(rate));
+      }catch{}
+    }
+    setRateLoading(false);
+  }
+
+  function setF(key){return v=>setForm(f=>({...f,[key]:v}));}
+
+  function openAdd(){setForm(emptyForm());setEditId(null);setView("add");}
+  function openEdit(rec){setForm({...emptyForm(),...rec});setEditId(rec.id);setView("add");}
+
+  function saveRecord(){
+    if(!form.date||!form.tourName){showToast("날짜와 투어명은 필수입니다","err");return;}
+    if(editId){
+      setRecords(r=>r.map(x=>x.id===editId?{...form,id:editId}:x));
+      showToast("수정되었습니다 ✓");
+    }else{
+      setRecords(r=>[...r,{...form,id:Date.now()}]);
+      showToast("추가되었습니다 ✓");
+    }
+    setView("list");setEditId(null);
+  }
+
+  function deleteRecord(id){
+    if(!window.confirm("삭제할까요?"))return;
+    setRecords(r=>r.filter(x=>x.id!==id));
+    showToast("삭제되었습니다");setView("list");
+  }
+
+  function exportCSV(){
+    const headers=["날짜","투어명/코스","인원","일당(EUR)",
+      ...OPTION_ITEMS.map(i=>i.rate?`옵션-${i.label}인원`:`옵션-${i.label}(EUR)`),
+      ...OPTION_ITEMS.filter(i=>i.rate).map(i=>`옵션-${i.label}(EUR)`),
+      ...SHOPPING_ITEMS.map(i=>`쇼핑-${i.label}(EUR)`),
+      "TIP(EUR)","기타수입(EUR)",
+      ...EXPENSE_ITEMS.map(i=>`지출-${i.label}(EUR)`),
+      "메모","총수입(EUR)","총지출(EUR)","순수익(EUR)"];
+    const rows=filtered.map(r=>[
+      r.date,r.tourName,r.pax,r.dailyWage||0,
+      ...OPTION_ITEMS.map(i=>i.rate?(r[i.paxKey]||0):(r[i.key]||0)),
+      ...OPTION_ITEMS.filter(i=>i.rate).map(i=>r[i.key]||0),
+      ...SHOPPING_ITEMS.map(i=>r[i.key]||0),
+      r.tip||0,r.otherIncome||0,
+      ...EXPENSE_ITEMS.map(i=>r[i.key]||0),
+      r.memo,totalIncome(r),totalExpense(r),netEur(r),
+    ]);
+    const csv=[headers,...rows].map(r=>r.map(v=>`"${v??""}"`).join(",")).join("\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`emre-income-${filterMonth||"all"}.csv`;a.click();
+    showToast("CSV 내보내기 완료 ✓");
+  }
+
+  // ── JSON 백업 내보내기 (전체 데이터, 가져오기용) ──
+  function exportJSON(){
+    const blob=new Blob([JSON.stringify(records,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download=`emre-backup-${today()}.json`;a.click();
+    showToast("백업 저장 완료 ✓");
+  }
+
+  // ── 백업 가져오기 (JSON + CSV 모두 지원) ──
+  function importFile(e){
+    const file=e.target.files[0];
+    if(!file)return;
+    const reader=new FileReader();
+    reader.onload=ev=>{
+      try{
+        const content=ev.target.result;
+
+        // ── JSON 형식 ──
+        if(file.name.endsWith(".json")){
+          const parsed=JSON.parse(content);
+          if(!Array.isArray(parsed)){showToast("올바른 백업 파일이 아닙니다","err");return;}
+          if(!window.confirm(`${parsed.length}개의 기록을 가져올까요?\n기존 데이터와 합쳐집니다.`))return;
+          setRecords(prev=>{
+            const existingIds=new Set(prev.map(r=>r.id));
+            const newRecs=parsed.filter(r=>!existingIds.has(r.id));
+            return [...prev,...newRecs];
+          });
+          showToast(`${parsed.length}개 기록 가져오기 완료 ✓`);
+          return;
+        }
+
+        // ── CSV 형식 ──
+        const lines=content.split("\n").map(l=>l.trim()).filter(l=>l);
+        if(lines.length<2){showToast("데이터가 없습니다","err");return;}
+
+        // 헤더 파싱
+        const parseCSVLine=line=>{
+          const result=[]; let cur=""; let inQ=false;
+          for(let i=0;i<line.length;i++){
+            const c=line[i];
+            if(c==='"'){inQ=!inQ;}
+            else if(c===","&&!inQ){result.push(cur.trim());cur="";}
+            else cur+=c;
+          }
+          result.push(cur.trim());
+          return result;
+        };
+
+        const headers=parseCSVLine(lines[0]);
+        const idx=(name)=>headers.findIndex(h=>h.includes(name));
+
+        const parsed=[];
+        for(let i=1;i<lines.length;i++){
+          const cols=parseCSVLine(lines[i]);
+          if(cols.length<4)continue;
+          const get=(name)=>(cols[idx(name)]||"").replace(/^"|"$/g,"").trim();
+          const rec={
+            id: Date.now()+i,
+            date:       get("날짜"),
+            tourName:   get("투어명"),
+            pax:        get("인원"),
+            dailyWage:  get("일당"),
+            balloon:    get("열기구(EUR)"), balloon_pax: get("열기구인원"),
+            jeep:       get("사파리(EUR)"), jeep_pax:    get("사파리인원"),
+            kart:       get("카트(EUR)"),   kart_pax:    get("카트인원"),
+            cruise:     get("유람선(EUR)"), cruise_pax:  get("유람선인원"),
+            optOther:   get("기타(EUR)"),
+            carpet:     get("카페트"),
+            turquoise:  get("터키석"),
+            cotton:     get("면제품"),
+            leather:    get("양가죽"),
+            lokum:      get("로쿰"),
+            tip:        get("TIP"),
+            otherIncome:get("기타수입"),
+            snack:      get("주전부리"),
+            drink:      get("음료"),
+            expOther:   get("기타"),
+            memo:       get("메모"),
+          };
+          if(rec.date&&rec.tourName) parsed.push(rec);
+        }
+
+        if(parsed.length===0){showToast("읽을 수 있는 데이터가 없습니다","err");return;}
+        if(!window.confirm(`${parsed.length}개의 기록을 가져올까요?\n기존 데이터와 합쳐집니다.`))return;
+        setRecords(prev=>[...prev,...parsed]);
+        showToast(`${parsed.length}개 기록 가져오기 완료 ✓`);
+
+      }catch(err){showToast("파일을 읽을 수 없습니다","err");}
+    };
+    reader.readAsText(file,"UTF-8");
+    e.target.value="";
+  }
+
+  const filtered=useMemo(()=>{
+    // 최신 날짜가 위(최근순), 오래된 날짜가 아래
+    let list=[...records].sort((a,b)=>b.date.localeCompare(a.date));
+    if(filterMonth)list=list.filter(r=>monthKey(r.date)===filterMonth);
+    return list;
+  },[records,filterMonth]);
+
+  const months=useMemo(()=>{
+    const s=new Set(records.map(r=>monthKey(r.date)).filter(Boolean));
+    return [...s].sort((a,b)=>b.localeCompare(a));
+  },[records]);
+
+  const stats=useMemo(()=>({
+    net:filtered.reduce((s,r)=>s+netEur(r),0),
+    wage:filtered.reduce((s,r)=>s+pf(r.dailyWage),0),
+    option:filtered.reduce((s,r)=>s+totalOption(r),0),
+    shopping:filtered.reduce((s,r)=>s+totalShopping(r),0),
+    tipOther:filtered.reduce((s,r)=>s+totalTipOther(r),0),
+    expense:filtered.reduce((s,r)=>s+totalExpense(r),0),
+    pax:filtered.reduce((s,r)=>s+parseInt(r.pax||0),0),
+  }),[filtered]);
+
+  const chartData=useMemo(()=>{
+    const now=new Date();
+    return Array.from({length:6},(_,i)=>{
+      const d=new Date(now.getFullYear(),now.getMonth()-(5-i),1);
+      const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      const recs=records.filter(r=>monthKey(r.date)===key);
+      return{label:`${d.getMonth()+1}월`,value:Math.max(recs.reduce((s,r)=>s+netEur(r),0),0)};
+    });
+  },[records]);
+
+  const detailRec=records.find(r=>r.id===detailId);
+
+  // ── 공통 스타일 ──
+  const C={
+    header:{background:"linear-gradient(135deg,#1a3a6b 0%,#0a1628 100%)",padding:"18px 18px 14px",position:"sticky",top:0,zIndex:50,borderBottom:"1px solid #1e3a5f"},
+    rateBar:{display:"flex",alignItems:"center",gap:8,marginTop:8,background:"rgba(245,158,11,0.08)",borderRadius:8,padding:"6px 10px"},
+    filterBar:{display:"flex",gap:8,padding:"10px 14px",overflowX:"auto",background:"#0a1628",borderBottom:"1px solid #1e293b"},
+    chip:(a)=>({padding:"5px 12px",borderRadius:20,fontSize:12,fontWeight:600,cursor:"pointer",border:"none",whiteSpace:"nowrap",background:a?"#f59e0b":"#1e293b",color:a?"#0f172a":"#94a3b8"}),
+    summaryCard:{margin:"10px 14px",background:"linear-gradient(135deg,#1a3055 0%,#1e293b 100%)",borderRadius:16,padding:14,border:"1px solid #2d4a6b"},
+    grid4:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8},
+    sItem:{background:"rgba(10,22,40,0.6)",borderRadius:10,padding:"10px 12px"},
+    card:{background:"#1e293b",borderRadius:14,padding:"14px 16px",cursor:"pointer",border:"1px solid #334155",marginBottom:10},
+    nav:{position:"fixed",bottom:0,left:0,right:0,background:"#0a1628",borderTop:"1px solid #1e293b",display:"flex",zIndex:100},
+    navBtn:(a)=>({flex:1,padding:"10px 0 8px",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",border:"none",background:"transparent",color:a?"#f59e0b":"#475569",fontSize:10,fontWeight:a?700:400}),
+    input:{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"11px 12px",color:"#f1f5f9",fontSize:14,outline:"none",boxSizing:"border-box"},
+    textarea:{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"11px 12px",color:"#f1f5f9",fontSize:14,outline:"none",boxSizing:"border-box",minHeight:68,resize:"vertical"},
+    row2:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10},
+    saveBtn:{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:12,padding:"14px",color:"#0f172a",fontSize:15,fontWeight:800,cursor:"pointer",marginTop:6},
+    cancelBtn:{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:"12px",color:"#94a3b8",fontSize:14,cursor:"pointer",marginTop:8},
+    backBtn:{background:"transparent",border:"none",color:"#f59e0b",fontSize:13,fontWeight:600,cursor:"pointer",padding:0},
+    fab:{position:"fixed",bottom:70,right:20,background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:28,width:52,height:52,fontSize:24,color:"#0f172a",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(245,158,11,0.4)",zIndex:99},
+    detailRow:{display:"flex",justifyContent:"space-between",padding:"11px 0",borderBottom:"1px solid #1e293b"},
+    chartCard:{background:"#1e293b",borderRadius:14,padding:16,marginBottom:12,border:"1px solid #334155"},
+  };
+
+  // 총수입 미리보기 (폼)
+  function TotalBar(){
+    const ti=totalIncome(form), te=totalExpense(form), net=ti-te;
+    return(
+      <div style={{background:"#0a1628",borderRadius:12,padding:"12px 14px",marginBottom:14,border:"1px solid #1e3a5f"}}>
+        <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>💰 총 수입 합계</div>
+        <div style={{fontSize:20,fontWeight:800,color:ti>0?"#34d399":"#475569"}}>{fmt(ti)}</div>
+        {eurRate&&ti>0&&<div style={{fontSize:11,color:"#64748b",marginTop:1}}>{fmt(ti*eurRate,"KRW")}</div>}
+        {ti>0&&(
+          <div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
+            {pf(form.dailyWage)>0&&<span style={{fontSize:10,background:"rgba(59,130,246,0.15)",color:"#60a5fa",borderRadius:6,padding:"2px 7px"}}>일당 {fmt(form.dailyWage)}</span>}
+            {totalOption(form)>0&&<span style={{fontSize:10,background:"rgba(245,158,11,0.15)",color:"#fbbf24",borderRadius:6,padding:"2px 7px"}}>옵션 {fmt(totalOption(form))}</span>}
+            {totalShopping(form)>0&&<span style={{fontSize:10,background:"rgba(167,139,250,0.15)",color:"#a78bfa",borderRadius:6,padding:"2px 7px"}}>쇼핑 {fmt(totalShopping(form))}</span>}
+            {totalTipOther(form)>0&&<span style={{fontSize:10,background:"rgba(52,211,153,0.15)",color:"#34d399",borderRadius:6,padding:"2px 7px"}}>팁/기타 {fmt(totalTipOther(form))}</span>}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  const isListLike = view==="list"||view==="stats";
+
+  return (
+    <div style={{background:"#0a1628",minHeight:"100vh",color:"#f1f5f9",maxWidth:430,margin:"0 auto",paddingBottom:80}}>
+
+      {/* ── 헤더 ── */}
+      <div style={C.header}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          {(view==="add"||view==="detail")?(
+            <button style={C.backBtn} onClick={()=>setView("list")}>← 뒤로</button>
+          ):(
+            <div>
+              <div style={{fontSize:18,fontWeight:700,color:"#f59e0b"}}>🌍 Emre 계산기</div>
+              <div style={{fontSize:11,color:"#64748b"}}>Guide Income Tracker · Turkey</div>
+            </div>
+          )}
+          <div style={{display:"flex",gap:6}}>
+            {view==="list"&&<button onClick={exportCSV} style={{background:"#1e3a5f",border:"1px solid #2d4a6b",borderRadius:8,padding:"6px 10px",color:"#94a3b8",fontSize:11,cursor:"pointer"}}>CSV ↓</button>}
+            {view==="list"&&<button onClick={exportJSON} style={{background:"#1e3a5f",border:"1px solid #2d4a6b",borderRadius:8,padding:"6px 10px",color:"#60a5fa",fontSize:11,cursor:"pointer"}}>백업 ↓</button>}
+            {view==="list"&&(
+              <label style={{background:"#1e3a5f",border:"1px solid #2d4a6b",borderRadius:8,padding:"6px 10px",color:"#34d399",fontSize:11,cursor:"pointer"}}>
+                가져오기 ↑
+                <input type="file" accept=".json,.csv" onChange={importFile} style={{display:"none"}}/>
+              </label>
+            )}
+            {view==="detail"&&detailRec&&<button onClick={()=>deleteRecord(detailRec.id)} style={{background:"transparent",border:"1px solid #ef4444",borderRadius:8,padding:"6px 10px",color:"#ef4444",fontSize:11,cursor:"pointer"}}>삭제</button>}
+          </div>
+        </div>
+        <div style={C.rateBar}>
+          <span>💱</span>
+          {rateLoading?<span style={{fontSize:12,color:"#64748b"}}>환율 불러오는 중...</span>
+            :eurRate?<span style={{fontSize:12,color:"#fbbf24",fontWeight:600}}>1 EUR = ₩{eurRate.toLocaleString("ko-KR")}</span>
+            :<span style={{fontSize:12,color:"#475569"}}>환율 정보 없음</span>}
+          <button onClick={fetchRate} style={{marginLeft:"auto",fontSize:10,color:"#64748b",cursor:"pointer",padding:"2px 6px",borderRadius:4,border:"1px solid #334155",background:"transparent"}}>↻</button>
+        </div>
+      </div>
+
+      {/* ══ LIST ══ */}
+      {view==="list"&&(
+        <>
+          <div style={C.filterBar}>
+            <button style={C.chip(!filterMonth)} onClick={()=>setFilterMonth("")}>전체</button>
+            {months.map(m=>(
+              <button key={m} style={C.chip(filterMonth===m)} onClick={()=>setFilterMonth(m)}>
+                {m.slice(0,4)}년 {parseInt(m.slice(5))}월
+              </button>
+            ))}
+          </div>
+
+          <div style={C.summaryCard}>
+            <div style={{fontSize:11,color:"#64748b",fontWeight:600,marginBottom:10,letterSpacing:1}}>
+              📊 {filterMonth?`${parseInt(filterMonth.slice(5))}월 요약`:"전체 요약"}
+            </div>
+            <div style={C.grid4}>
+              {[
+                {label:"순수익",val:fmt(stats.net),sub:eurRate?fmt(stats.net*eurRate,"KRW"):null,color:stats.net>=0?"#34d399":"#f87171"},
+                {label:"총 인원",val:`${stats.pax}명`,color:"#f1f5f9"},
+                {label:"일당 합계",val:fmt(stats.wage),color:"#60a5fa"},
+                {label:"지출 합계",val:fmt(stats.expense),color:"#f87171"},
+                {label:"옵션 인센티브",val:fmt(stats.option),color:"#fbbf24"},
+                {label:"쇼핑 인센티브",val:fmt(stats.shopping),color:"#a78bfa"},
+              ].map(({label,val,sub,color})=>(
+                <div key={label} style={C.sItem}>
+                  <div style={{fontSize:10,color:"#64748b",marginBottom:3}}>{label}</div>
+                  <div style={{fontSize:14,fontWeight:700,color}}>{val}</div>
+                  {sub&&<div style={{fontSize:9,color:"#64748b",marginTop:1}}>{sub}</div>}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{padding:"0 14px"}}>
+            {filtered.length===0&&(
+              <div style={{textAlign:"center",color:"#475569",padding:"40px 0",fontSize:14}}>
+                기록이 없습니다<br/><span style={{fontSize:11}}>+ 버튼으로 추가해보세요</span>
+              </div>
+            )}
+            {filtered.map(rec=>{
+              const net=netEur(rec);
+              return(
+                <div key={rec.id} style={C.card} onClick={()=>{setDetailId(rec.id);setView("detail");}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                    <div>
+                      <div style={{fontWeight:700,fontSize:14,color:"#f1f5f9"}}>{rec.tourName}</div>
+                      <div style={{fontSize:11,color:"#64748b",marginTop:2}}>{fmtDate(rec.date)}{rec.pax?` · ${rec.pax}명`:""}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:16,fontWeight:800,color:net>=0?"#34d399":"#f87171"}}>{fmt(net)}</div>
+                      {eurRate&&<div style={{fontSize:10,color:"#64748b"}}>{fmt(net*eurRate,"KRW")}</div>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:8,marginTop:8,flexWrap:"wrap"}}>
+                    {pf(rec.dailyWage)>0&&<span style={{fontSize:11,color:"#60a5fa"}}>💼 {fmt(rec.dailyWage)}</span>}
+                    {totalOption(rec)>0&&<span style={{fontSize:11,color:"#fbbf24"}}>⭐ {fmt(totalOption(rec))}</span>}
+                    {totalShopping(rec)>0&&<span style={{fontSize:11,color:"#a78bfa"}}>🛍 {fmt(totalShopping(rec))}</span>}
+                    {pf(rec.tip)>0&&<span style={{fontSize:11,color:"#34d399"}}>💝 {fmt(rec.tip)}</span>}
+                    {totalExpense(rec)>0&&<span style={{fontSize:11,color:"#f87171"}}>📤 {fmt(totalExpense(rec))}</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ══ ADD / EDIT ══ */}
+      {view==="add"&&(
+        <div style={{padding:"14px 16px"}}>
+          <div style={{fontSize:16,fontWeight:800,color:"#f1f5f9",marginBottom:16}}>
+            {editId?"✏️ 기록 수정":"➕ 새 기록 추가"}
+          </div>
+
+          <div style={C.row2}>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:11,color:"#94a3b8",fontWeight:600,marginBottom:5,display:"block"}}>날짜</label>
+              <input type="date" style={C.input} value={form.date} onChange={e=>setF("date")(e.target.value)}/>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{fontSize:11,color:"#94a3b8",fontWeight:600,marginBottom:5,display:"block"}}>인원 수</label>
+              <input type="number" inputMode="numeric" style={C.input} placeholder="0" value={form.pax} onChange={e=>setF("pax")(e.target.value)}/>
+            </div>
+          </div>
+
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:11,color:"#94a3b8",fontWeight:600,marginBottom:5,display:"block"}}>투어명 / 코스</label>
+            <input type="text" style={C.input} placeholder="예: 카파도키아 1일 투어" value={form.tourName} onChange={e=>setF("tourName")(e.target.value)}/>
+          </div>
+
+          <TotalBar/>
+
+          <Accordion title="💼 일당" total={pf(form.dailyWage)} color="#60a5fa" accentColor="#1d4ed8" badge="Day Wage">
+            <InputRow label="일당 (€)" value={form.dailyWage} onChange={setF("dailyWage")} color="#60a5fa"/>
+          </Accordion>
+
+          <Accordion title="⭐ 옵션 인센티브" total={totalOption(form)} color="#fbbf24" accentColor="#d97706" badge="Option">
+            <div style={{fontSize:10,color:"#64748b",marginBottom:12}}>판매 인원 입력 시 자동 계산</div>
+            {OPTION_ITEMS.map(item=>{
+              if(item.rate===null){
+                // 기타: 직접 금액 입력
+                return <InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#fbbf24"/>;
+              }
+              const paxVal = form[item.paxKey]||"";
+              const calcAmt = pf(paxVal)*item.rate;
+              return(
+                <div key={item.key} style={{marginBottom:12}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <span style={{fontSize:12,color:"#fbbf24",fontWeight:600,minWidth:115}}>{item.label}</span>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <div style={{display:"flex",alignItems:"center",gap:3}}>
+                        <input type="number" inputMode="numeric" placeholder="0"
+                          value={paxVal}
+                          onChange={e=>{
+                            const p=e.target.value;
+                            const amt=pf(p)*item.rate;
+                            setForm(f=>({...f,[item.paxKey]:p,[item.key]:amt>0?String(amt):""}));
+                          }}
+                          style={{width:52,background:"#1e293b",border:`1px solid ${pf(paxVal)>0?"#d97706":"#2d3748"}`,borderRadius:8,padding:"8px 6px",color:"#f1f5f9",fontSize:13,outline:"none",textAlign:"center"}}
+                        />
+                        <span style={{fontSize:11,color:"#64748b"}}>명</span>
+                      </div>
+                      <span style={{fontSize:11,color:"#475569"}}>×€{item.rate}</span>
+                      <span style={{fontSize:13,fontWeight:700,color:calcAmt>0?"#fbbf24":"#475569",minWidth:48,textAlign:"right"}}>
+                        {calcAmt>0?fmt(calcAmt):"—"}
+                      </span>
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:"#475569",textAlign:"right",marginTop:2}}>인당 €{item.rate} 고정</div>
+                </div>
+              );
+            })}
+          </Accordion>
+
+          <Accordion title="🛍 쇼핑 인센티브" total={totalShopping(form)} color="#a78bfa" accentColor="#7c3aed" badge="Shopping">
+            <div style={{fontSize:10,color:"#64748b",marginBottom:10}}>판매한 쇼핑 상품별 인센티브 입력</div>
+            {SHOPPING_ITEMS.map(item=>(
+              <InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#a78bfa"/>
+            ))}
+          </Accordion>
+
+          <Accordion title="💝 TIP / 기타 수입" total={totalTipOther(form)} color="#34d399" accentColor="#059669" badge="Tip">
+            <InputRow label="💝 TIP (€)" value={form.tip} onChange={setF("tip")} color="#34d399"/>
+            <InputRow label="✦ 기타 수입 (€)" value={form.otherIncome} onChange={setF("otherIncome")} color="#34d399"/>
+          </Accordion>
+
+          <Accordion title="📤 지출 / 경비" total={totalExpense(form)} color="#f87171" accentColor="#dc2626" badge="Expense">
+            <div style={{fontSize:10,color:"#64748b",marginBottom:10}}>항목별 지출 입력</div>
+            {EXPENSE_ITEMS.map(item=>(
+              <InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#f87171"/>
+            ))}
+          </Accordion>
+
+          <div style={{marginBottom:12}}>
+            <label style={{fontSize:11,color:"#94a3b8",fontWeight:600,marginBottom:5,display:"block"}}>메모</label>
+            <textarea style={C.textarea} placeholder="특이사항, 메모..." value={form.memo} onChange={e=>setF("memo")(e.target.value)}/>
+          </div>
+
+          {/* 순수익 미리보기 */}
+          <div style={{background:"#0a1628",borderRadius:12,padding:"12px 14px",marginBottom:14,border:"1px solid #1e3a5f",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span style={{fontSize:13,color:"#64748b"}}>예상 순수익</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:18,fontWeight:800,color:(totalIncome(form)-totalExpense(form))>=0?"#34d399":"#f87171"}}>{fmt(totalIncome(form)-totalExpense(form))}</div>
+              {eurRate&&<div style={{fontSize:11,color:"#64748b"}}>{fmt((totalIncome(form)-totalExpense(form))*eurRate,"KRW")}</div>}
+            </div>
+          </div>
+
+          <button style={C.saveBtn} onClick={saveRecord}>저장하기</button>
+          <button style={C.cancelBtn} onClick={()=>setView("list")}>취소</button>
+        </div>
+      )}
+
+      {/* ══ DETAIL ══ */}
+      {view==="detail"&&detailRec&&(
+        <div style={{padding:16}}>
+          <div style={{fontSize:18,fontWeight:800,color:"#f1f5f9",marginBottom:2}}>{detailRec.tourName}</div>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:18}}>{fmtDate(detailRec.date)}{detailRec.pax?` · ${detailRec.pax}명`:""}</div>
+
+          <div style={C.detailRow}>
+            <span style={{fontSize:13,color:"#64748b"}}>💼 일당</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:13,color:"#60a5fa",fontWeight:700}}>{fmt(detailRec.dailyWage||0)}</div>
+              {eurRate&&pf(detailRec.dailyWage)>0&&<div style={{fontSize:10,color:"#64748b"}}>{fmt(pf(detailRec.dailyWage)*eurRate,"KRW")}</div>}
+            </div>
+          </div>
+
+          <DetailAccordion title="⭐ 옵션 인센티브" total={totalOption(detailRec)}
+            items={OPTION_ITEMS.map(i=>i.rate?{...i,label:`${i.label} (${pf(detailRec[i.paxKey])||0}명×€${i.rate})`}:i)}
+            rec={detailRec} eurRate={eurRate} color="#fbbf24" accentColor="#d97706"/>
+          <DetailAccordion title="🛍 쇼핑 인센티브" total={totalShopping(detailRec)} items={SHOPPING_ITEMS} rec={detailRec} eurRate={eurRate} color="#a78bfa" accentColor="#7c3aed"/>
+          <DetailAccordion title="💝 TIP / 기타 수입" total={totalTipOther(detailRec)} items={[{key:"tip",label:"💝 TIP"},{key:"otherIncome",label:"✦ 기타"}]} rec={detailRec} eurRate={eurRate} color="#34d399" accentColor="#059669"/>
+          <DetailAccordion title="📤 지출 / 경비" total={totalExpense(detailRec)} items={EXPENSE_ITEMS} rec={detailRec} eurRate={eurRate} color="#f87171" accentColor="#dc2626"/>
+
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,background:"linear-gradient(135deg,#1a3055,#1e293b)",borderRadius:14,padding:"14px 16px",border:"1px solid #2d4a6b"}}>
+            <span style={{fontSize:14,fontWeight:700,color:"#f1f5f9"}}>순수익</span>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:22,fontWeight:800,color:netEur(detailRec)>=0?"#34d399":"#f87171"}}>{fmt(netEur(detailRec))}</div>
+              {eurRate&&<div style={{fontSize:12,color:"#64748b"}}>{fmt(netEur(detailRec)*eurRate,"KRW")}</div>}
+            </div>
+          </div>
+
+          {detailRec.memo&&(
+            <div style={{marginTop:14,background:"#1e293b",borderRadius:12,padding:"12px 14px"}}>
+              <div style={{fontSize:11,color:"#64748b",marginBottom:5}}>메모</div>
+              <div style={{fontSize:13,color:"#cbd5e1",lineHeight:1.6}}>{detailRec.memo}</div>
+            </div>
+          )}
+          <button style={{...C.saveBtn,marginTop:20}} onClick={()=>openEdit(detailRec)}>✏️ 수정하기</button>
+        </div>
+      )}
+
+      {/* ══ STATS ══ */}
+      {view==="stats"&&(
+        <div style={{padding:"12px 14px"}}>
+          <div style={{fontSize:16,fontWeight:800,color:"#f1f5f9",marginBottom:14}}>📈 수익 통계</div>
+          <div style={C.chartCard}>
+            <div style={{fontSize:12,color:"#94a3b8",fontWeight:600,marginBottom:12}}>월별 순수익 추이 (EUR)</div>
+            <BarChart data={chartData}/>
+          </div>
+          <div style={C.chartCard}>
+            <div style={{fontSize:12,color:"#94a3b8",fontWeight:600,marginBottom:12}}>월별 상세 내역</div>
+            {months.slice(0,12).map(m=>{
+              const recs=records.filter(r=>monthKey(r.date)===m);
+              const net=recs.reduce((s,r)=>s+netEur(r),0);
+              const opt=recs.reduce((s,r)=>s+totalOption(r),0);
+              const shop=recs.reduce((s,r)=>s+totalShopping(r),0);
+              const pax=recs.reduce((s,r)=>s+parseInt(r.pax||0),0);
+              return(
+                <div key={m} style={{padding:"9px 0",borderBottom:"1px solid #1e293b"}}>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <div>
+                      <div style={{fontSize:13,fontWeight:600,color:"#f1f5f9"}}>{parseInt(m.slice(5))}월 {m.slice(0,4)}</div>
+                      <div style={{fontSize:11,color:"#64748b"}}>{recs.length}건 · {pax}명</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:14,fontWeight:700,color:net>=0?"#34d399":"#f87171"}}>{fmt(net)}</div>
+                      {eurRate&&<div style={{fontSize:10,color:"#64748b"}}>{fmt(net*eurRate,"KRW")}</div>}
+                    </div>
+                  </div>
+                  {(opt>0||shop>0)&&(
+                    <div style={{display:"flex",gap:8,marginTop:5}}>
+                      {opt>0&&<span style={{fontSize:10,color:"#fbbf24"}}>옵션 {fmt(opt)}</span>}
+                      {shop>0&&<span style={{fontSize:10,color:"#a78bfa"}}>쇼핑 {fmt(shop)}</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {months.length===0&&<div style={{color:"#475569",fontSize:13,textAlign:"center",padding:"20px 0"}}>데이터 없음</div>}
+          </div>
+        </div>
+      )}
+
+      {/* FAB */}
+      {isListLike&&<button style={C.fab} onClick={openAdd}>＋</button>}
+
+      {/* 하단 네비 */}
+      <div style={C.nav}>
+        {[{id:"list",icon:"📋",label:"기록"},{id:"stats",icon:"📈",label:"통계"}].map(({id,icon,label})=>(
+          <button key={id} style={C.navBtn(view===id||(view==="detail"&&id==="list")||(view==="add"&&id==="list"))} onClick={()=>setView(id)}>
+            <span style={{fontSize:20}}>{icon}</span><span>{label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+
+<!-- PWA Service Worker (오프라인 지원) -->
+<script>
+if("serviceWorker" in navigator){
+  const swCode=`
+    const CACHE="emre-calc-v1";
+    const ASSETS=["/"];
+    self.addEventListener("install",e=>{
+      e.waitUntil(caches.open(CACHE).then(c=>c.addAll(ASSETS)));
+      self.skipWaiting();
+    });
+    self.addEventListener("activate",e=>{
+      e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k!==CACHE).map(k=>caches.delete(k)))));
+      self.clients.claim();
+    });
+    self.addEventListener("fetch",e=>{
+      e.respondWith(
+        caches.match(e.request).then(cached=>cached||fetch(e.request).catch(()=>cached))
+      );
+    });
+  `;
+  const blob=new Blob([swCode],{type:"application/javascript"});
+  const url=URL.createObjectURL(blob);
+  navigator.serviceWorker.register(url).catch(()=>{});
+}
+</script>
+</body>
+</html>
