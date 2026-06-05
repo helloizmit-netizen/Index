@@ -58,13 +58,36 @@ function monthKey(d){return d?d.slice(0,7):"";}
 function pf(v){return parseFloat(v||0);}
 function today(){return new Date().toISOString().slice(0,10);}
 
+// ── 구버전 데이터 마이그레이션 ──
+function migrateRecord(r,idx){
+  const updated={...r};
+  if(!updated.extraOpt) updated.extraOpt=[];
+  if(!updated.extraShop) updated.extraShop=[];
+  if(!updated.extraTip) updated.extraTip=[];
+  if(!updated.extraExp) updated.extraExp=[];
+  // optOther → extraOpt
+  if(pf(r.optOther)>0){
+    updated.extraOpt=[...updated.extraOpt,{id:r.id+1+idx,label:"기타",amount:String(r.optOther),pax:"",manualRate:""}];
+    updated.optOther="";
+  }
+  // otherIncome → extraTip
+  if(pf(r.otherIncome)>0){
+    updated.extraTip=[...updated.extraTip,{id:r.id+2+idx,label:"기타수입",amount:String(r.otherIncome),pax:"",manualRate:""}];
+    updated.otherIncome="";
+  }
+  // expOther → extraExp
+  if(pf(r.expOther)>0){
+    updated.extraExp=[...updated.extraExp,{id:r.id+3+idx,label:"기타",amount:String(r.expOther),pax:"",manualRate:""}];
+    updated.expOther="";
+  }
+  return updated;
+}
+
 // ── Items ──
 const OPT=[
-  {key:"balloon",  label:"🎈 열기구",     rate:30,paxKey:"balloon_pax"},
   {key:"jeep",     label:"🚙 지프 사파리",rate:20,paxKey:"jeep_pax"},
   {key:"kart",     label:"🏎 카트",       rate:10,paxKey:"kart_pax"},
   {key:"cruise",   label:"⛵ 유람선",     rate:10,paxKey:"cruise_pax"},
-  {key:"optOther", label:"➕ 기타",       rate:null},
 ];
 const SHOP=[
   {key:"carpet",   label:"🪄 카페트"},
@@ -76,24 +99,86 @@ const SHOP=[
 const EXP=[
   {key:"snack",    label:"🍿 주전부리"},
   {key:"drink",    label:"🥤 음료"},
-  {key:"expOther", label:"➕ 기타"},
 ];
 
 function emptyForm(){
   return{date:today(),tourName:"",pax:"",days:"1",dailyWage:"",
-    balloon:"",balloon_pax:"",jeep:"",jeep_pax:"",kart:"",kart_pax:"",cruise:"",cruise_pax:"",optOther:"",
+    balloon:"",balloon_pax:"",jeep:"",jeep_pax:"",kart:"",kart_pax:"",cruise:"",cruise_pax:"",
     carpet:"",turquoise:"",cotton:"",leather:"",lokum:"",
-    tip:"",otherIncome:"",snack:"",drink:"",expOther:"",memo:""};
+    tip:"",snack:"",drink:"",memo:"",
+    extraOpt:[],extraShop:[],extraTip:[],extraExp:[],
+  };
 }
+// 추가항목 합계
+function tExtraOpt(r){return(r.extraOpt||[]).reduce((s,i)=>s+pf(i.amount),0);}
+function tExtraShop(r){return(r.extraShop||[]).reduce((s,i)=>s+pf(i.amount),0);}
+function tExtraTip(r){return(r.extraTip||[]).reduce((s,i)=>s+pf(i.amount),0);}
+function tExtraExp(r){return(r.extraExp||[]).reduce((s,i)=>s+pf(i.amount),0);}
 function sumKeys(r,keys){return keys.reduce((s,k)=>s+pf(r[k]),0);}
-function tOpt(r){return sumKeys(r,OPT.map(i=>i.key));}
-function tShop(r){return sumKeys(r,SHOP.map(i=>i.key));}
-function tTip(r){return pf(r.tip)+pf(r.otherIncome);}
-function tExp(r){return sumKeys(r,EXP.map(i=>i.key));}
+function tOpt(r){return sumKeys(r,OPT.map(i=>i.key))+tExtraOpt(r);}
+function tShop(r){return sumKeys(r,SHOP.map(i=>i.key))+tExtraShop(r);}
+function tTip(r){return pf(r.tip)+tExtraTip(r);}
+function tExp(r){return sumKeys(r,EXP.map(i=>i.key))+tExtraExp(r);}
 function tInc(r){return pf(r.dailyWage)+tOpt(r)+tShop(r)+tTip(r);}
 function netEur(r){return tInc(r)-tExp(r);}
 
-// ── Toast ──
+// ── 동적 추가 항목 입력 컴포넌트 ──
+function ExtraItems({items,onChange,color,withPax=false,paxRate=null,addLabel="+ 항목 추가"}){
+  function add(){onChange([...items,{id:Date.now(),label:"",amount:"",pax:""}]);}
+  function remove(id){onChange(items.filter(i=>i.id!==id));}
+  function update(id,field,val){
+    onChange(items.map(i=>{
+      if(i.id!==id)return i;
+      const updated={...i,[field]:val};
+      // 인원+단가 자동계산
+      if(withPax&&paxRate&&(field==="pax")){
+        updated.amount=pf(val)*paxRate>0?String(pf(val)*paxRate):"";
+      }
+      return updated;
+    }));
+  }
+  return(
+    <div>
+      {items.map(item=>(
+        <div key={item.id} style={{marginBottom:10,background:"rgba(0,0,0,0.2)",borderRadius:10,padding:"10px 12px"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}>
+            <input type="text" placeholder="항목명" value={item.label} onChange={e=>update(item.id,"label",e.target.value)}
+              style={{flex:1,background:"var(--bg2)",border:`1px solid ${color||"var(--border)"}`,borderRadius:7,padding:"7px 10px",color:"var(--text)",fontSize:12,outline:"none"}}/>
+            <button onClick={()=>remove(item.id)} style={{background:"transparent",border:"none",color:"#ef4444",fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}}>✕</button>
+          </div>
+          {withPax?(
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{display:"flex",alignItems:"center",gap:3,flex:1}}>
+                <input type="number" inputMode="numeric" placeholder="인원" value={item.pax} onChange={e=>update(item.id,"pax",e.target.value)}
+                  style={{width:60,background:"var(--bg2)",border:`1px solid var(--border)`,borderRadius:7,padding:"7px 8px",color:"var(--text)",fontSize:12,outline:"none",textAlign:"center"}}/>
+                <span style={{fontSize:11,color:"var(--sub)"}}>명</span>
+              </div>
+              <span style={{fontSize:11,color:"#475569"}}>×</span>
+              <div style={{display:"flex",alignItems:"center",gap:3,flex:1}}>
+                <span style={{color:"#475569",fontSize:12}}>€</span>
+                <input type="number" inputMode="decimal" placeholder="단가" value={paxRate||item.manualRate||""} readOnly={!!paxRate}
+                  onChange={e=>!paxRate&&update(item.id,"manualRate",e.target.value)}
+                  style={{flex:1,background:"var(--bg2)",border:`1px solid var(--border)`,borderRadius:7,padding:"7px 8px",color:"var(--text)",fontSize:12,outline:"none",textAlign:"right",opacity:paxRate?0.5:1}}/>
+              </div>
+              <span style={{fontSize:12,fontWeight:700,color:pf(item.pax)>0?color:"#475569",minWidth:48,textAlign:"right"}}>
+                {pf(item.pax)>0?fmt(pf(item.pax)*(paxRate||pf(item.manualRate))):"—"}
+              </span>
+            </div>
+          ):(
+            <div style={{display:"flex",alignItems:"center",gap:4}}>
+              <span style={{color:"#475569",fontSize:13}}>€</span>
+              <input type="number" inputMode="decimal" placeholder="0" value={item.amount} onChange={e=>update(item.id,"amount",e.target.value)}
+                style={{flex:1,background:"var(--bg2)",border:`1px solid ${pf(item.amount)>0?(color||"var(--border)"):"var(--border)"}`,borderRadius:8,padding:"8px 10px",color:"var(--text)",fontSize:13,outline:"none",textAlign:"right"}}/>
+            </div>
+          )}
+        </div>
+      ))}
+      <button onClick={add} style={{width:"100%",background:"transparent",border:`1px dashed ${color||"var(--border)"}`,borderRadius:9,padding:"8px",color:color||"var(--sub)",fontSize:12,fontWeight:600,cursor:"pointer",marginTop:4}}>
+        {addLabel}
+      </button>
+    </div>
+  );
+}
 function toast(msg,type="ok"){
   const el=document.getElementById("toast");
   el.textContent=msg;el.style.background=type==="err"?"#ef4444":"#10b981";el.style.color="#fff";
@@ -236,7 +321,7 @@ function App(){
 
   // init
   useEffect(()=>{
-    setRecords(loadRecords());
+    setRecords(loadRecords().map((r,i)=>migrateRecord(r,i)));
     setTemplates(loadLS(TK,[]));
     setMonthGoal(loadLS(SK_GOAL,0));
     const th=loadLS(SK_THEME,true);
@@ -333,7 +418,8 @@ function App(){
           const parsed=JSON.parse(content);
           if(!Array.isArray(parsed)){toast("올바른 파일이 아닙니다","err");return;}
           if(!window.confirm(`${parsed.length}개 기록을 가져올까요? (기존 데이터와 합쳐집니다)`))return;
-          setRecords(prev=>{const ids=new Set(prev.map(r=>r.id));return[...prev,...parsed.filter(r=>!ids.has(r.id))];});
+          const migrated=parsed.map((r,i)=>migrateRecord(r,i));
+          setRecords(prev=>{const ids=new Set(prev.map(r=>r.id));return[...prev,...migrated.filter(r=>!ids.has(r.id))];});
           toast(`${parsed.length}개 가져오기 완료 ✓`);
         }else{
           const lines=content.split("\n").map(l=>l.trim()).filter(l=>l);
@@ -609,20 +695,35 @@ function App(){
                 </div>
               );
             })}
+            {/* 추가 옵션 항목 */}
+            {(form.extraOpt||[]).length>0&&<div style={{borderTop:"1px dashed var(--border)",paddingTop:10,marginTop:4,marginBottom:6}}><span style={{fontSize:10,color:"#fbbf24"}}>추가 옵션</span></div>}
+            <ExtraItems
+              items={form.extraOpt||[]}
+              onChange={v=>setForm(f=>({...f,extraOpt:v.map(i=>({...i,amount:pf(i.pax)>0&&pf(i.manualRate)>0?String(pf(i.pax)*pf(i.manualRate)):i.amount}))}))}
+              color="#fbbf24" withPax={true}
+              addLabel="+ 옵션 추가"
+            />
           </Accordion>
 
           <Accordion title="🛍 쇼핑 인센티브" total={tShop(form)} color="#a78bfa" accent="#7c3aed" badge="Shopping">
             <div style={{fontSize:10,color:"var(--sub)",marginBottom:10}}>상품별 인센티브 입력</div>
             {SHOP.map(item=><InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#a78bfa"/>)}
+            {/* 추가 쇼핑 항목 */}
+            {(form.extraShop||[]).length>0&&<div style={{borderTop:"1px dashed var(--border)",paddingTop:10,marginTop:4,marginBottom:6}}><span style={{fontSize:10,color:"#a78bfa"}}>추가 쇼핑</span></div>}
+            <ExtraItems items={form.extraShop||[]} onChange={v=>setForm(f=>({...f,extraShop:v}))} color="#a78bfa" addLabel="+ 쇼핑 추가"/>
           </Accordion>
 
           <Accordion title="💝 TIP / 기타 수입" total={tTip(form)} color="#34d399" accent="#059669" badge="Tip">
             <InputRow label="💝 TIP (€)" value={form.tip} onChange={setF("tip")} color="#34d399"/>
-            <InputRow label="✦ 기타 수입 (€)" value={form.otherIncome} onChange={setF("otherIncome")} color="#34d399"/>
+            {(form.extraTip||[]).length>0&&<div style={{borderTop:"1px dashed var(--border)",paddingTop:10,marginTop:4,marginBottom:6}}><span style={{fontSize:10,color:"#34d399"}}>추가 항목</span></div>}
+            <ExtraItems items={form.extraTip||[]} onChange={v=>setForm(f=>({...f,extraTip:v}))} color="#34d399" addLabel="+ 항목 추가"/>
           </Accordion>
 
           <Accordion title="📤 지출 / 경비" total={tExp(form)} color="#f87171" accent="#dc2626" badge="Expense">
             {EXP.map(item=><InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#f87171"/>)}
+            {/* 추가 지출 항목 */}
+            {(form.extraExp||[]).length>0&&<div style={{borderTop:"1px dashed var(--border)",paddingTop:10,marginTop:4,marginBottom:6}}><span style={{fontSize:10,color:"#f87171"}}>추가 지출</span></div>}
+            <ExtraItems items={form.extraExp||[]} onChange={v=>setForm(f=>({...f,extraExp:v}))} color="#f87171" addLabel="+ 지출 추가"/>
           </Accordion>
 
           <div style={{marginBottom:12}}>
@@ -655,10 +756,25 @@ function App(){
               {eurRate&&pf(detailRec.dailyWage)>0&&<div style={{fontSize:10,color:"var(--sub)"}}>{fmt(pf(detailRec.dailyWage)*eurRate,"KRW")}</div>}
             </div>
           </div>
-          <DetailAcc title="⭐ 옵션 인센티브" total={tOpt(detailRec)} items={OPT.map(i=>i.rate?{...i,label:`${i.label}(${pf(detailRec[i.paxKey])||0}명×€${i.rate})`}:i)} rec={detailRec} eurRate={eurRate} color="#fbbf24" accent="#d97706"/>
-          <DetailAcc title="🛍 쇼핑 인센티브" total={tShop(detailRec)} items={SHOP} rec={detailRec} eurRate={eurRate} color="#a78bfa" accent="#7c3aed"/>
-          <DetailAcc title="💝 TIP / 기타" total={tTip(detailRec)} items={[{key:"tip",label:"💝 TIP"},{key:"otherIncome",label:"✦ 기타"}]} rec={detailRec} eurRate={eurRate} color="#34d399" accent="#059669"/>
-          <DetailAcc title="📤 지출 / 경비" total={tExp(detailRec)} items={EXP} rec={detailRec} eurRate={eurRate} color="#f87171" accent="#dc2626"/>
+          <DetailAcc title="⭐ 옵션 인센티브" total={tOpt(detailRec)}
+            items={[
+              ...OPT.map(i=>i.rate?{...i,label:`${i.label}(${pf(detailRec[i.paxKey])||0}명×€${i.rate})`}:i),
+              ...(detailRec.extraOpt||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가옵션",_val:pf(i.amount)}))
+            ]}
+            rec={{...detailRec,...Object.fromEntries((detailRec.extraOpt||[]).map(i=>[`x_${i.id}`,i.amount]))}}
+            eurRate={eurRate} color="#fbbf24" accent="#d97706"/>
+          <DetailAcc title="🛍 쇼핑 인센티브" total={tShop(detailRec)}
+            items={[...SHOP,...(detailRec.extraShop||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가쇼핑"}))]}
+            rec={{...detailRec,...Object.fromEntries((detailRec.extraShop||[]).map(i=>[`x_${i.id}`,i.amount]))}}
+            eurRate={eurRate} color="#a78bfa" accent="#7c3aed"/>
+          <DetailAcc title="💝 TIP / 기타" total={tTip(detailRec)}
+            items={[{key:"tip",label:"💝 TIP"},{key:"otherIncome",label:"✦ 기타"},...(detailRec.extraTip||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가항목"}))]}
+            rec={{...detailRec,...Object.fromEntries((detailRec.extraTip||[]).map(i=>[`x_${i.id}`,i.amount]))}}
+            eurRate={eurRate} color="#34d399" accent="#059669"/>
+          <DetailAcc title="📤 지출 / 경비" total={tExp(detailRec)}
+            items={[...EXP,...(detailRec.extraExp||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가지출"}))]}
+            rec={{...detailRec,...Object.fromEntries((detailRec.extraExp||[]).map(i=>[`x_${i.id}`,i.amount]))}}
+            eurRate={eurRate} color="#f87171" accent="#dc2626"/>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,background:"linear-gradient(135deg,#1a3055,#1e293b)",borderRadius:14,padding:"14px 16px",border:"1px solid #2d4a6b"}}>
             <span style={{fontSize:14,fontWeight:700,color:"#f1f5f9"}}>순수익</span>
             <div style={{textAlign:"right"}}>
