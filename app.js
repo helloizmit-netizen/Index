@@ -458,30 +458,23 @@ function App(){
   const chartData=useMemo(()=>{const now=new Date();return Array.from({length:6},(_,i)=>{const d=new Date(now.getFullYear(),now.getMonth()-(5-i),1);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;const recs=records.filter(r=>monthKey(r.date)===key);return{label:`${d.getMonth()+1}월`,value:Math.max(recs.reduce((s,r)=>s+netEur(r),0),0)};});},[records]);
 
   const detailRec=records.find(r=>r.id===detailId);
+
+  // ── 공통 스타일 상수 ──
   const inp={width:"100%",background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:10,padding:"11px 12px",color:"var(--text)",fontSize:14,outline:"none",boxSizing:"border-box"};
   const ccard={background:"var(--card)",borderRadius:14,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:10};
   const chartCard={background:"var(--card)",borderRadius:14,padding:16,marginBottom:12,border:"1px solid var(--border)"};
   const tabBtn=t=>({flex:1,padding:"8px 4px",border:"none",borderRadius:8,fontSize:10,fontWeight:600,cursor:"pointer",background:statTab===t?"#f59e0b":"var(--bg2)",color:statTab===t?"#0f172a":"var(--sub)"});
   const isLL=view==="list"||view==="stats"||view==="settings";
+  const detailRec=records.find(r=>r.id===detailId);
 
-  function TotalBar(){
-    const ti=tInc(form),net=ti-tExp(form);
-    return <div style={{background:"var(--bg3)",borderRadius:12,padding:"12px 14px",marginBottom:14,border:"1px solid #1e3a5f"}}>
-      <div style={{fontSize:11,color:"var(--sub)",marginBottom:4}}>💰 총 수입 합계</div>
-      <div style={{fontSize:20,fontWeight:800,color:ti>0?"#34d399":"#475569"}}>{fmt(ti)}</div>
-      {eurRate&&ti>0&&<div style={{fontSize:11,color:"var(--sub)",marginTop:1}}>{fmt(ti*eurRate,"KRW")}</div>}
-      {ti>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
-        {pf(form.dailyWage)>0&&<span style={{fontSize:10,background:"rgba(59,130,246,0.15)",color:"#60a5fa",borderRadius:6,padding:"2px 7px"}}>일당 {fmt(form.dailyWage)}</span>}
-        {tOpt(form)>0&&<span style={{fontSize:10,background:"rgba(245,158,11,0.15)",color:"#fbbf24",borderRadius:6,padding:"2px 7px"}}>옵션 {fmt(tOpt(form))}</span>}
-        {tShop(form)>0&&<span style={{fontSize:10,background:"rgba(167,139,250,0.15)",color:"#a78bfa",borderRadius:6,padding:"2px 7px"}}>쇼핑 {fmt(tShop(form))}</span>}
-        {tTip(form)>0&&<span style={{fontSize:10,background:"rgba(52,211,153,0.15)",color:"#34d399",borderRadius:6,padding:"2px 7px"}}>팁 {fmt(tTip(form))}</span>}
-      </div>}
-    </div>;
-  }
+  // ── 총수입 미리보기 값 ──
+  const ti=tInc(form);
+  const formNet=ti-tExp(form);
 
-  // ── Header ──
-  function Header(){
-    return <div style={{background:"linear-gradient(135deg,#1a3a6b 0%,#0a1628 100%)",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:50,borderBottom:"1px solid #1e3a5f"}}>
+  return <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text)",maxWidth:430,margin:"0 auto",paddingBottom:80}}>
+
+    {/* HEADER */}
+    <div style={{background:"linear-gradient(135deg,#1a3a6b 0%,#0a1628 100%)",padding:"16px 16px 12px",position:"sticky",top:0,zIndex:50,borderBottom:"1px solid #1e3a5f"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         {(view==="add"||view==="detail")?
           <button style={{background:"transparent",border:"none",color:"#f59e0b",fontSize:13,fontWeight:600,cursor:"pointer",padding:0}} onClick={()=>setView("list")}>← 뒤로</button>:
@@ -506,12 +499,10 @@ function App(){
         {rateLoading?<span style={{fontSize:11,color:"#64748b"}}>환율 불러오는 중...</span>:eurRate?<span style={{fontSize:11,color:"#fbbf24",fontWeight:600}}>1 EUR = ₩{eurRate.toLocaleString("ko-KR")}</span>:<span style={{fontSize:11,color:"#475569"}}>환율 정보 없음</span>}
         <button onClick={fetchRate} style={{marginLeft:"auto",fontSize:10,color:"#64748b",cursor:"pointer",padding:"2px 6px",borderRadius:4,border:"1px solid #334155",background:"transparent"}}>↻</button>
       </div>
-    </div>;
-  }
+    </div>
 
-  // ── List View ──
-  function ListView(){
-    return <>
+    {/* ══ LIST ══ */}
+    {view==="list"&&<>
       {showSearch&&<div style={{padding:"8px 14px",background:"var(--bg)",borderBottom:"1px solid var(--border)"}}>
         <input type="text" placeholder="투어명 검색..." value={searchQ} onChange={e=>setSearchQ(e.target.value)} style={{...inp,padding:"9px 12px",fontSize:13}}/>
       </div>}
@@ -531,17 +522,13 @@ function App(){
           <span style={{fontSize:10,color:goalPct>=100?"#34d399":"#f59e0b",fontWeight:700}}>{goalPct}%</span>
         </div>
         {effMonthGoal>0&&<>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--sub)",marginBottom:3}}>
-            <span>💰 월 수익</span><span>{fmt(thisMonthNet)} / {fmt(effMonthGoal)}</span>
-          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--sub)",marginBottom:3}}><span>💰 월 수익</span><span>{fmt(thisMonthNet)} / {fmt(effMonthGoal)}</span></div>
           <div style={{background:"var(--bg3)",borderRadius:20,height:6,overflow:"hidden",marginBottom:8}}>
             <div style={{height:"100%",width:`${goalPct}%`,background:goalPct>=100?"#34d399":"linear-gradient(90deg,#f59e0b,#fbbf24)",borderRadius:20,transition:"width 0.5s"}}/>
           </div>
         </>}
         {effPPGoal>0&&<>
-          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--sub)",marginBottom:3}}>
-            <span>👤 인당 수익</span><span>{fmt(Math.round(thisMonthPP))} / {fmt(effPPGoal)}</span>
-          </div>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"var(--sub)",marginBottom:3}}><span>👤 인당 수익</span><span>{fmt(Math.round(thisMonthPP))} / {fmt(effPPGoal)}</span></div>
           <div style={{background:"var(--bg3)",borderRadius:20,height:6,overflow:"hidden",marginBottom:4}}>
             <div style={{height:"100%",width:`${ppPct}%`,background:ppPct>=100?"#34d399":"linear-gradient(90deg,#a78bfa,#60a5fa)",borderRadius:20,transition:"width 0.5s"}}/>
           </div>
@@ -607,12 +594,10 @@ function App(){
           </div>;
         })}
       </div>
-    </>;
-  }
+    </>}
 
-  // ── Add/Edit View ──
-  function AddView(){
-    return <div style={{padding:"14px 16px"}}>
+    {/* ══ ADD/EDIT ══ */}
+    {view==="add"&&<div style={{padding:"14px 16px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
         <div style={{fontSize:16,fontWeight:800,color:"var(--text)"}}>{editId?"✏️ 기록 수정":"➕ 새 기록"}</div>
         <div style={{display:"flex",gap:6}}>
@@ -636,10 +621,26 @@ function App(){
         <div><label style={{fontSize:11,color:"var(--sub)",fontWeight:600,display:"block",marginBottom:5}}>투어명 / 코스</label><input type="text" style={inp} placeholder="예: 카파도키아 투어" value={form.tourName} onChange={e=>setF("tourName")(e.target.value)}/></div>
         <div><label style={{fontSize:11,color:"#a78bfa",fontWeight:600,display:"block",marginBottom:5}}>📅 여행 일수</label><input type="number" inputMode="numeric" style={{...inp,borderColor:pf(form.days)>1?"#7c3aed":"var(--border)"}} placeholder="1" value={form.days} onChange={e=>setF("days")(e.target.value)}/></div>
       </div>
-      <TotalBar/>
+
+      {/* 총수입 미리보기 */}
+      <div style={{background:"var(--bg3)",borderRadius:12,padding:"12px 14px",marginBottom:14,border:"1px solid #1e3a5f"}}>
+        <div style={{fontSize:11,color:"var(--sub)",marginBottom:4}}>💰 총 수입 합계</div>
+        <div style={{fontSize:20,fontWeight:800,color:ti>0?"#34d399":"#475569"}}>{fmt(ti)}</div>
+        {eurRate&&ti>0&&<div style={{fontSize:11,color:"var(--sub)",marginTop:1}}>{fmt(ti*eurRate,"KRW")}</div>}
+        {ti>0&&<div style={{display:"flex",flexWrap:"wrap",gap:5,marginTop:8}}>
+          {pf(form.dailyWage)>0&&<span style={{fontSize:10,background:"rgba(59,130,246,0.15)",color:"#60a5fa",borderRadius:6,padding:"2px 7px"}}>일당 {fmt(form.dailyWage)}</span>}
+          {tOpt(form)>0&&<span style={{fontSize:10,background:"rgba(245,158,11,0.15)",color:"#fbbf24",borderRadius:6,padding:"2px 7px"}}>옵션 {fmt(tOpt(form))}</span>}
+          {tShop(form)>0&&<span style={{fontSize:10,background:"rgba(167,139,250,0.15)",color:"#a78bfa",borderRadius:6,padding:"2px 7px"}}>쇼핑 {fmt(tShop(form))}</span>}
+          {tTip(form)>0&&<span style={{fontSize:10,background:"rgba(52,211,153,0.15)",color:"#34d399",borderRadius:6,padding:"2px 7px"}}>팁 {fmt(tTip(form))}</span>}
+        </div>}
+      </div>
+
+      {/* 일당 */}
       <Accordion title="💼 일당" total={pf(form.dailyWage)} color="#60a5fa" accent="#1d4ed8" badge="Day Wage" open={accOpen.wage} onToggle={()=>toggleAcc("wage")}>
         <InputRow label="일당 (€)" value={form.dailyWage} onChange={setF("dailyWage")} color="#60a5fa"/>
       </Accordion>
+
+      {/* 옵션 */}
       <Accordion title="⭐ 옵션 인센티브" total={tOpt(form)} color="#fbbf24" accent="#d97706" badge="Option" open={accOpen.opt} onToggle={()=>toggleAcc("opt")}>
         <div style={{fontSize:10,color:"var(--sub)",marginBottom:12}}>토글 OFF = 이번 투어 해당 없음 (점수 제외)</div>
         {OPT.map(item=>{
@@ -665,6 +666,8 @@ function App(){
           <ExtraItems items={form.extraOpt||[]} onChange={v=>setForm(f=>({...f,extraOpt:v}))} color="#fbbf24" withPax={true} addLabel="+ 옵션 추가"/>
         </div>
       </Accordion>
+
+      {/* 쇼핑 */}
       <Accordion title="🛍 쇼핑 인센티브" total={tShop(form)} color="#a78bfa" accent="#7c3aed" badge="Shopping" open={accOpen.shop} onToggle={()=>toggleAcc("shop")}>
         <div style={{fontSize:10,color:"var(--sub)",marginBottom:12}}>토글 OFF = 이번 투어 해당 없음 (점수 제외)</div>
         {SHOP.map(item=>{
@@ -684,6 +687,8 @@ function App(){
           <ExtraItems items={form.extraShop||[]} onChange={v=>setForm(f=>({...f,extraShop:v}))} color="#a78bfa" addLabel="+ 쇼핑 추가"/>
         </div>
       </Accordion>
+
+      {/* TIP */}
       <Accordion title="💝 TIP / 기타 수입" total={tTip(form)} color="#34d399" accent="#059669" badge="Tip" open={accOpen.tip} onToggle={()=>toggleAcc("tip")}>
         <InputRow label="💝 TIP (€)" value={form.tip} onChange={setF("tip")} color="#34d399"/>
         <div style={{borderTop:"1px dashed var(--border)",paddingTop:10,marginTop:2,marginBottom:8}}>
@@ -692,10 +697,13 @@ function App(){
         </div>
         <ExtraItems items={form.extraTip||[]} onChange={v=>setForm(f=>({...f,extraTip:v}))} color="#34d399" addLabel="+ 항목 추가"/>
       </Accordion>
+
+      {/* 지출 */}
       <Accordion title="📤 지출 / 경비" total={tExp(form)} color="#f87171" accent="#dc2626" badge="Expense" open={accOpen.exp} onToggle={()=>toggleAcc("exp")}>
         {EXP.map(item=><InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#f87171"/>)}
         <ExtraItems items={form.extraExp||[]} onChange={v=>setForm(f=>({...f,extraExp:v}))} color="#f87171" addLabel="+ 지출 추가"/>
       </Accordion>
+
       <div style={{marginBottom:12}}>
         <label style={{fontSize:11,color:"var(--sub)",fontWeight:600,display:"block",marginBottom:5}}>메모</label>
         <textarea style={{...inp,minHeight:68,resize:"vertical"}} placeholder="특이사항, 메모..." value={form.memo} onChange={e=>setF("memo")(e.target.value)}/>
@@ -703,263 +711,259 @@ function App(){
       <div style={{background:"var(--bg3)",borderRadius:12,padding:"12px 14px",marginBottom:14,border:"1px solid #1e3a5f",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
         <span style={{fontSize:13,color:"var(--sub)"}}>예상 순수익</span>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:18,fontWeight:800,color:(tInc(form)-tExp(form))>=0?"#34d399":"#f87171"}}>{fmt(tInc(form)-tExp(form))}</div>
-          {eurRate&&<div style={{fontSize:11,color:"var(--sub)"}}>{fmt((tInc(form)-tExp(form))*eurRate,"KRW")}</div>}
+          <div style={{fontSize:18,fontWeight:800,color:formNet>=0?"#34d399":"#f87171"}}>{fmt(formNet)}</div>
+          {eurRate&&<div style={{fontSize:11,color:"var(--sub)"}}>{fmt(formNet*eurRate,"KRW")}</div>}
         </div>
       </div>
       <button style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:12,padding:"14px",color:"#0f172a",fontSize:15,fontWeight:800,cursor:"pointer"}} onClick={saveRecord}>저장하기</button>
       <button style={{width:"100%",background:"var(--bg2)",border:"1px solid var(--border)",borderRadius:12,padding:"12px",color:"var(--sub)",fontSize:14,cursor:"pointer",marginTop:8}} onClick={()=>setView("list")}>취소</button>
-    </div>;
-  }
+    </div>}
 
-  // ── Detail View ──
-  function DetailView(){
-    if(!detailRec)return null;
-    const sc=calcScore(detailRec,records,scoreCfg);
-    const g=getGrade(sc?.total??null);
-    const pax=parseInt(detailRec.pax||0);
-    const tog=detailRec.optToggle||defOptTog();
-    const shopTog=detailRec.shopToggle||defShopTog();
-    const pn=ppNet(detailRec);
-    const isRec=bestPP&&detailRec.id===bestPP.id;
-    return <div style={{padding:16}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-        <div>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <div style={{fontSize:18,fontWeight:800,color:"var(--text)"}}>{detailRec.tourName}</div>
-            {isRec&&<span style={{fontSize:12,color:"#fbbf24"}}>🏅최고기록</span>}
-          </div>
-          <div style={{fontSize:12,color:"var(--sub)",marginTop:2}}>{fmtDate(detailRec.date)}{pax?` · ${pax}명`:""}{detailRec.days&&pf(detailRec.days)>1?` · ${detailRec.days}일`:""}</div>
-        </div>
-        {sc&&<ScoreBadge score={sc.total} size="lg"/>}
-      </div>
-      {sc&&<div style={{background:"var(--bg3)",borderRadius:12,padding:"12px 14px",marginBottom:16,border:`1px solid ${g.color}44`}}>
-        <div style={{fontSize:11,color:"var(--sub)",marginBottom:10,fontWeight:600}}>📊 점수 상세</div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-          {[{label:"옵션 효율",val:`${sc.optEff}%`,score:sc.optScore,max:scoreCfg.wOpt,color:"#fbbf24"},{label:"인당 쇼핑",val:fmt(sc.perPaxShop),score:sc.shopScore,max:scoreCfg.wShop,color:"#a78bfa"},{label:"부수입 배율",val:`${sc.mult.toFixed(1)}배`,score:sc.multScore,max:scoreCfg.wMult,color:"#60a5fa"},{label:"인당 순수익",val:fmt(sc.perPaxNet),score:sc.ppScore,max:scoreCfg.wPerPax,color:"#34d399"}].map(({label,val,score,max,color})=><div key={label} style={{background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"8px 10px"}}>
-            <div style={{fontSize:10,color:"var(--sub)",marginBottom:3}}>{label}</div>
-            <div style={{fontSize:12,color,fontWeight:700}}>{val}</div>
-            <div style={{fontSize:10,color:"var(--sub)",marginTop:2}}>{score}/{max}점</div>
-            <div style={{background:"var(--border)",borderRadius:4,height:3,marginTop:4}}>
-              <div style={{width:`${clamp(score/max*100,0,100)}%`,height:"100%",background:color,borderRadius:4}}/>
+    {/* ══ DETAIL ══ */}
+    {view==="detail"&&detailRec&&(()=>{
+      const sc=calcScore(detailRec,records,scoreCfg);
+      const g=getGrade(sc?.total??null);
+      const pax=parseInt(detailRec.pax||0);
+      const tog=detailRec.optToggle||defOptTog();
+      const shopTog=detailRec.shopToggle||defShopTog();
+      const pn=ppNet(detailRec);
+      const isRec=bestPP&&detailRec.id===bestPP.id;
+      return <div style={{padding:16}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+          <div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}>
+              <div style={{fontSize:18,fontWeight:800,color:"var(--text)"}}>{detailRec.tourName}</div>
+              {isRec&&<span style={{fontSize:12,color:"#fbbf24"}}>🏅최고기록</span>}
             </div>
-          </div>)}
-        </div>
-        {sc.bonus>0&&<div style={{background:"rgba(245,158,11,0.1)",borderRadius:8,padding:"6px 10px",display:"flex",justifyContent:"space-between",marginBottom:6}}>
-          <span style={{fontSize:11,color:"#fbbf24"}}>⭐ 보너스</span>
-          <span style={{fontSize:11,color:"#fbbf24",fontWeight:700}}>+{sc.bonus}점</span>
-        </div>}
-        {pax>0&&<div style={{background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"8px 10px"}}>
-          <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>👤 인당 순수익 비교</div>
-          <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-            <div><div style={{fontSize:9,color:"#475569"}}>이번</div><div style={{fontSize:13,fontWeight:700,color:"#34d399"}}>{fmt(Math.round(pn))}</div></div>
-            {sc.avgPN>0&&<div><div style={{fontSize:9,color:"#475569"}}>평균</div><div style={{fontSize:13,fontWeight:700,color:"#94a3b8"}}>{fmt(Math.round(sc.avgPN))}</div></div>}
-            {bestPPVal>0&&<div><div style={{fontSize:9,color:"#475569"}}>🏅최고</div><div style={{fontSize:13,fontWeight:700,color:"#fbbf24"}}>{fmt(Math.round(bestPPVal))}</div></div>}
-            {effPPGoal>0&&<div><div style={{fontSize:9,color:"#475569"}}>🎯목표</div><div style={{fontSize:13,fontWeight:700,color:"#60a5fa"}}>{fmt(effPPGoal)}</div></div>}
+            <div style={{fontSize:12,color:"var(--sub)",marginTop:2}}>{fmtDate(detailRec.date)}{pax?` · ${pax}명`:""}{detailRec.days&&pf(detailRec.days)>1?` · ${detailRec.days}일`:""}</div>
           </div>
-        </div>}
-      </div>}
-      <div style={{borderBottom:"1px solid var(--border)",padding:"11px 0",display:"flex",justifyContent:"space-between"}}>
-        <span style={{fontSize:13,color:"var(--sub)"}}>💼 일당</span>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:13,color:"#60a5fa",fontWeight:700}}>{fmt(detailRec.dailyWage||0)}</div>
-          {eurRate&&pf(detailRec.dailyWage)>0&&<div style={{fontSize:10,color:"var(--sub)"}}>{fmt(pf(detailRec.dailyWage)*eurRate,"KRW")}</div>}
+          {sc&&<ScoreBadge score={sc.total} size="lg"/>}
         </div>
-      </div>
-      <DetailAcc title="⭐ 옵션 인센티브" total={tOpt(detailRec)} items={[...OPT.filter(i=>tog[i.key]!==false).map(i=>({...i,label:`${i.label}(${pf(detailRec[i.paxKey])||0}명×€${i.rate})`})),...(detailRec.extraOpt||[]).map(i=>({key:`x_${i.id}`,label:`⭐ ${i.label||"추가옵션"}`}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraOpt||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#fbbf24" accent="#d97706"/>
-      <DetailAcc title="🛍 쇼핑 인센티브" total={tShop(detailRec)} items={[...SHOP.filter(i=>shopTog[i.key]!==false),...(detailRec.extraShop||[]).map(i=>({key:`x_${i.id}`,label:`🛍 ${i.label||"추가쇼핑"}`}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraShop||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#a78bfa" accent="#7c3aed"/>
-      <DetailAcc title="💝 TIP / 기타" total={tTip(detailRec)} items={[{key:"tip",label:"💝 TIP"},...TIP_FIXED,...(detailRec.extraTip||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가항목"}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraTip||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#34d399" accent="#059669"/>
-      <DetailAcc title="📤 지출 / 경비" total={tExp(detailRec)} items={[...EXP,...(detailRec.extraExp||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가지출"}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraExp||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#f87171" accent="#dc2626"/>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,background:"linear-gradient(135deg,#1a3055,#1e293b)",borderRadius:14,padding:"14px 16px",border:"1px solid #2d4a6b"}}>
-        <span style={{fontSize:14,fontWeight:700,color:"#f1f5f9"}}>순수익</span>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:22,fontWeight:800,color:netEur(detailRec)>=0?"#34d399":"#f87171"}}>{fmt(netEur(detailRec))}</div>
-          {eurRate&&<div style={{fontSize:12,color:"#64748b"}}>{fmt(netEur(detailRec)*eurRate,"KRW")}</div>}
-          {detailRec.days&&pf(detailRec.days)>0&&<div style={{fontSize:11,color:"#64748b",marginTop:2}}>{fmt(Math.round(netEur(detailRec)/pf(detailRec.days)))}/일</div>}
-        </div>
-      </div>
-      {detailRec.memo&&<div style={{marginTop:14,background:"var(--bg2)",borderRadius:12,padding:"12px 14px"}}><div style={{fontSize:11,color:"var(--sub)",marginBottom:5}}>메모</div><div style={{fontSize:13,color:"var(--text)",lineHeight:1.6}}>{detailRec.memo}</div></div>}
-      <button style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:12,padding:"14px",color:"#0f172a",fontSize:15,fontWeight:800,cursor:"pointer",marginTop:20}} onClick={()=>openEdit(detailRec)}>✏️ 수정하기</button>
-    </div>;
-  }
-
-  // ── Stats View ──
-  function StatsView(){
-    const scoredRecs=[...records].filter(r=>parseInt(r.pax||0)>0&&pf(r.dailyWage)>0).sort((a,b)=>a.date.localeCompare(b.date)).map(r=>({...r,sc:calcScore(r,records,scoreCfg)})).filter(r=>r.sc);
-    const avgScore=scoredRecs.length?Math.round(scoredRecs.reduce((s,r)=>s+r.sc.total,0)/scoredRecs.length):0;
-    const bestRec=scoredRecs.reduce((b,r)=>!b||r.sc.total>b.sc.total?r:b,null);
-    const recentScores=scoredRecs.slice(-8);
-    const monthScores=months.slice(0,6).map(m=>{const recs=scoredRecs.filter(r=>monthKey(r.date)===m);const avg=recs.length?Math.round(recs.reduce((s,r)=>s+r.sc.total,0)/recs.length):0;return{label:`${parseInt(m.slice(5))}월`,value:avg,color:getGrade(avg).color};}).reverse();
-    const optEffTrend=scoredRecs.slice(-8).map(r=>({label:fmtDate(r.date).slice(5),value:r.sc.optEff,color:r.sc.optEff>=100?"#34d399":r.sc.optEff>=70?"#fbbf24":"#f87171"}));
-    const pieData=[{label:"💼 일당",value:records.reduce((s,r)=>s+pf(r.dailyWage),0),color:"#60a5fa"},{label:"⭐ 옵션",value:records.reduce((s,r)=>s+tOpt(r),0),color:"#fbbf24"},{label:"🛍 쇼핑",value:records.reduce((s,r)=>s+tShop(r),0),color:"#a78bfa"},{label:"💝 팁/기타",value:records.reduce((s,r)=>s+tTip(r),0),color:"#34d399"}].filter(d=>d.value>0);
-    const totalPax=records.reduce((s,r)=>s+parseInt(r.pax||0),0);
-    const avgPPAll=totalPax>0?Math.round(records.reduce((s,r)=>s+netEur(r),0)/totalPax):0;
-    const thisYear=new Date().getFullYear();
-    const tyR=records.filter(r=>r.date?.startsWith(String(thisYear)));
-    const lyR=records.filter(r=>r.date?.startsWith(String(thisYear-1)));
-    const tyPax=tyR.reduce((s,r)=>s+parseInt(r.pax||0),0),lyPax=lyR.reduce((s,r)=>s+parseInt(r.pax||0),0);
-    const tyPP=tyPax>0?Math.round(tyR.reduce((s,r)=>s+netEur(r),0)/tyPax):0;
-    const lyPP=lyPax>0?Math.round(lyR.reduce((s,r)=>s+netEur(r),0)/lyPax):0;
-    const optC=["#fbbf24","#f59e0b","#d97706","#b45309"];
-    const shopC=["#a78bfa","#8b5cf6","#7c3aed","#6d28d9","#c4b5fd"];
-    const tipC=["#34d399","#10b981","#059669","#047857","#6ee7b7"];
-    const optPie=OPT.map((i,idx)=>({label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:optC[idx]})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
-    const shopPie=SHOP.map((i,idx)=>({label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:shopC[idx]})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
-    const tipPie=[{label:"💝 TIP",value:records.reduce((s,r)=>s+pf(r.tip),0),color:tipC[0]},...TIP_FIXED.map((i,idx)=>({label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:tipC[idx+1]}))].filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
-    const curPie=pieMode==="opt"?optPie:pieMode==="shop"?shopPie:pieMode==="tip"?tipPie:pieData;
-    const detailRows=[...OPT.map(i=>({cat:"⭐",label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:"#fbbf24"})),...SHOP.map(i=>({cat:"🛍",label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:"#a78bfa"})),...TIP_FIXED.map(i=>({cat:"💝",label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:"#34d399"}))].filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
-    const maxV=Math.max(...detailRows.map(d=>d.value),1);
-    const tourMap={};records.forEach(r=>{if(!tourMap[r.tourName])tourMap[r.tourName]={name:r.tourName,count:0,net:0,pax:0};tourMap[r.tourName].count++;tourMap[r.tourName].net+=netEur(r);tourMap[r.tourName].pax+=parseInt(r.pax||0);});
-    const tourRank=Object.values(tourMap).sort((a,b)=>b.net-a.net).slice(0,8);
-    const dayRank=records.filter(r=>pf(r.days||1)>0).map(r=>({date:r.date,name:r.tourName,days:pf(r.days||1),net:netEur(r),perDay:netEur(r)/pf(r.days||1),pax:r.pax})).sort((a,b)=>b.perDay-a.perDay).slice(0,8);
-    const mStats=months.slice(0,6).map(m=>{const recs=records.filter(r=>monthKey(r.date)===m);return{m,count:recs.length,pax:recs.reduce((s,r)=>s+parseInt(r.pax||0),0),wage:recs.reduce((s,r)=>s+pf(r.dailyWage),0),option:recs.reduce((s,r)=>s+tOpt(r),0),shopping:recs.reduce((s,r)=>s+tShop(r),0),tip:recs.reduce((s,r)=>s+tTip(r),0),expense:recs.reduce((s,r)=>s+tExp(r),0),net:recs.reduce((s,r)=>s+netEur(r),0)};});
-
-    return <div style={{padding:"12px 14px",paddingBottom:90}}>
-      <div style={{fontSize:16,fontWeight:800,color:"var(--text)",marginBottom:12}}>📈 수익 통계</div>
-      <div style={{display:"flex",gap:5,marginBottom:14,background:"var(--bg3)",borderRadius:10,padding:4}}>
-        {["overview","score","monthly","tour","daily"].map(t=><button key={t} style={tabBtn(t)} onClick={()=>setStatTab(t)}>{t==="overview"?"개요":t==="score"?"성과점수":t==="monthly"?"월별":t==="tour"?"투어별":"일단위"}</button>)}
-      </div>
-      {statTab==="overview"&&<>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-          <div style={{...chartCard,marginBottom:0,textAlign:"center"}}>
-            <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>👤 인당 평균</div>
-            <div style={{fontSize:18,fontWeight:800,color:"#34d399"}}>{fmt(avgPPAll)}</div>
-            {eurRate&&<div style={{fontSize:10,color:"var(--sub)"}}>{fmt(avgPPAll*eurRate,"KRW")}</div>}
-            {bestPPVal>0&&<div style={{marginTop:6,paddingTop:6,borderTop:"1px solid var(--border)"}}>
-              <div style={{fontSize:9,color:"#fbbf24"}}>🏅 최고기록</div>
-              <div style={{fontSize:14,fontWeight:800,color:"#fbbf24"}}>{fmt(Math.round(bestPPVal))}</div>
-              <div style={{fontSize:9,color:"var(--sub)"}}>{bestPP?.tourName?.slice(0,8)}</div>
-            </div>}
-          </div>
-          <div style={{...chartCard,marginBottom:0,textAlign:"center"}}>
-            <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>📅 연간 인당 평균</div>
-            <div style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{thisYear}년: {fmt(tyPP)}</div>
-            <div style={{fontSize:11,color:"var(--sub)"}}>{thisYear-1}년: {fmt(lyPP)}</div>
-            {tyPP>lyPP&&lyPP>0?<div style={{fontSize:10,color:"#34d399",marginTop:2}}>▲ {fmt(tyPP-lyPP)} 성장</div>:tyPP<lyPP&&tyPP>0?<div style={{fontSize:10,color:"#f87171",marginTop:2}}>▼ {fmt(lyPP-tyPP)} 감소</div>:<div style={{fontSize:10,color:"#475569",marginTop:2}}>전년 데이터 없음</div>}
-          </div>
-        </div>
-        <div style={chartCard}>
-          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:10}}>수입 항목별 비율</div>
-          <div style={{display:"flex",gap:5,marginBottom:12,flexWrap:"wrap"}}>
-            {[{id:"category",label:"전체",color:"#f59e0b"},{id:"opt",label:"⭐ 옵션",color:"#fbbf24"},{id:"shop",label:"🛍 쇼핑",color:"#a78bfa"},{id:"tip",label:"💝 팁",color:"#34d399"}].map(({id,label,color})=><button key={id} onClick={()=>setPieMode(id)} style={{padding:"4px 10px",borderRadius:20,fontSize:10,fontWeight:600,cursor:"pointer",border:`1px solid ${pieMode===id?color:"var(--border)"}`,background:pieMode===id?color+"22":"transparent",color:pieMode===id?color:"var(--sub)"}}>{label}</button>)}
-          </div>
-          <PieChart data={curPie}/>
-        </div>
-        <div style={chartCard}><div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>월별 순수익 추이</div><BarChart data={chartData}/></div>
-        <div style={chartCard}>
-          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:14}}>수입 세부 항목 비교</div>
-          {detailRows.map((d,i)=><div key={i} style={{marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                <span style={{fontSize:9,color:"var(--sub)",background:"var(--bg3)",borderRadius:4,padding:"1px 5px"}}>{d.cat}</span>
-                <span style={{fontSize:12,color:"var(--text)",fontWeight:600}}>{d.label}</span>
+        {sc&&<div style={{background:"var(--bg3)",borderRadius:12,padding:"12px 14px",marginBottom:16,border:`1px solid ${g.color}44`}}>
+          <div style={{fontSize:11,color:"var(--sub)",marginBottom:10,fontWeight:600}}>📊 점수 상세</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
+            {[{label:"옵션 효율",val:`${sc.optEff}%`,score:sc.optScore,max:scoreCfg.wOpt,color:"#fbbf24"},{label:"인당 쇼핑",val:fmt(sc.perPaxShop),score:sc.shopScore,max:scoreCfg.wShop,color:"#a78bfa"},{label:"부수입 배율",val:`${sc.mult.toFixed(1)}배`,score:sc.multScore,max:scoreCfg.wMult,color:"#60a5fa"},{label:"인당 순수익",val:fmt(sc.perPaxNet),score:sc.ppScore,max:scoreCfg.wPerPax,color:"#34d399"}].map(({label,val,score,max,color})=><div key={label} style={{background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"8px 10px"}}>
+              <div style={{fontSize:10,color:"var(--sub)",marginBottom:3}}>{label}</div>
+              <div style={{fontSize:12,color,fontWeight:700}}>{val}</div>
+              <div style={{fontSize:10,color:"var(--sub)",marginTop:2}}>{score}/{max}점</div>
+              <div style={{background:"var(--border)",borderRadius:4,height:3,marginTop:4}}>
+                <div style={{width:`${clamp(score/max*100,0,100)}%`,height:"100%",background:color,borderRadius:4}}/>
               </div>
-              <span style={{fontSize:13,fontWeight:700,color:d.color}}>{fmt(d.value)}</span>
-            </div>
-            <div style={{background:"var(--bg3)",borderRadius:4,height:5,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round(d.value/maxV*100)}%`,background:d.color,borderRadius:4}}/></div>
-          </div>)}
-        </div>
-      </>}
-      {statTab==="score"&&<>
-        <div style={chartCard}>
-          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>🏆 종합 성과</div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
-            <div style={{background:"var(--bg3)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-              <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>전체 평균 점수</div>
-              <div style={{fontSize:24,fontWeight:800,color:getGrade(avgScore).color}}>{avgScore}점</div>
-              <div style={{fontSize:11,color:getGrade(avgScore).color}}>{getGrade(avgScore).emoji} {getGrade(avgScore).label}</div>
-            </div>
-            <div style={{background:"var(--bg3)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
-              <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>평가 투어</div>
-              <div style={{fontSize:24,fontWeight:800,color:"#60a5fa"}}>{scoredRecs.length}</div>
-              <div style={{fontSize:11,color:"var(--sub)"}}>건</div>
-            </div>
-          </div>
-          {bestRec&&<div style={{background:"rgba(245,158,11,0.1)",borderRadius:10,padding:"10px 12px",border:"1px solid rgba(245,158,11,0.3)"}}>
-            <div style={{fontSize:10,color:"#fbbf24",marginBottom:4}}>🌟 최고 점수 투어</div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div><div style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{bestRec.tourName}</div><div style={{fontSize:11,color:"var(--sub)"}}>{fmtDate(bestRec.date)}</div></div>
-              <ScoreBadge score={bestRec.sc.total} size="lg"/>
-            </div>
-          </div>}
-        </div>
-        <div style={chartCard}>
-          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>📈 최근 점수 추이</div>
-          {recentScores.length>0?<>
-            <BarChart data={recentScores.map(r=>({label:fmtDate(r.date).slice(5),value:r.sc.total,color:getGrade(r.sc.total).color}))}/>
-            <div style={{marginTop:12}}>
-              {recentScores.map(r=><div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid var(--border)"}}>
-                <div><span style={{fontSize:12,color:"var(--text)",fontWeight:600}}>{r.tourName}</span><span style={{fontSize:10,color:"var(--sub)",marginLeft:6}}>{fmtDate(r.date)}</span></div>
-                <ScoreBadge score={r.sc.total}/>
-              </div>)}
-            </div>
-          </>:<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 부족 (인원·일당 입력 필요)</div>}
-        </div>
-        <div style={chartCard}><div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>📅 월별 평균 점수</div>{monthScores.some(d=>d.value>0)?<BarChart data={monthScores}/>:<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 없음</div>}</div>
-        <div style={chartCard}>
-          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:4}}>⭐ 옵션 효율 추이</div>
-          <div style={{fontSize:10,color:"var(--sub)",marginBottom:12}}>최대 가능 대비 달성률 (%)</div>
-          {optEffTrend.length>0?<><BarChart data={optEffTrend}/><div style={{display:"flex",justifyContent:"center",gap:12,marginTop:8}}>{[{c:"#34d399",l:"100%↑"},{c:"#fbbf24",l:"70~99%"},{c:"#f87171",l:"70%미만"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:c}}/><span style={{fontSize:10,color:"var(--sub)"}}>{l}</span></div>)}</div></>:<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 없음</div>}
-        </div>
-        <div style={chartCard}>
-          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>📊 지표별 평균</div>
-          {scoredRecs.length>0?[{label:"옵션 효율",val:`${Math.round(scoredRecs.reduce((s,r)=>s+r.sc.optEff,0)/scoredRecs.length)}%`,color:"#fbbf24",desc:"최대 가능 대비 달성률"},{label:"인당 쇼핑",val:fmt(Math.round(scoredRecs.reduce((s,r)=>s+r.sc.perPaxShop,0)/scoredRecs.length)),color:"#a78bfa",desc:"1인당 쇼핑 인센티브"},{label:"부수입 배율",val:`${(scoredRecs.reduce((s,r)=>s+r.sc.mult,0)/scoredRecs.length).toFixed(1)}배`,color:"#60a5fa",desc:"일당 대비 옵션+쇼핑+팁"},{label:"인당 순수익",val:fmt(Math.round(scoredRecs.reduce((s,r)=>s+r.sc.perPaxNet,0)/scoredRecs.length)),color:"#34d399",desc:"1인당 순수익"}].map(({label,val,color,desc})=><div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--border)"}}>
-            <div><div style={{fontSize:13,color:"var(--text)",fontWeight:600}}>{label}</div><div style={{fontSize:10,color:"var(--sub)"}}>{desc}</div></div>
-            <div style={{fontSize:16,fontWeight:800,color}}>{val}</div>
-          </div>):<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 없음</div>}
-        </div>
-      </>}
-      {statTab==="monthly"&&<div style={chartCard}>
-        <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>월별 상세 비교</div>
-        {mStats.length===0&&<div style={{color:"var(--sub)",fontSize:13,textAlign:"center",padding:20}}>데이터 없음</div>}
-        {mStats.map(m=><div key={m.m} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid var(--border)"}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-            <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{parseInt(m.m.slice(5))}월 {m.m.slice(0,4)}</span>
-            <span style={{fontSize:14,fontWeight:800,color:m.net>=0?"#34d399":"#f87171"}}>{fmt(m.net)}</span>
-          </div>
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
-            {[{l:"투어수",v:`${m.count}건`,c:"var(--sub)"},{l:"인원",v:`${m.pax}명`,c:"var(--sub)"},{l:"💼일당",v:fmt(m.wage),c:"#60a5fa"},{l:"⭐옵션",v:fmt(m.option),c:"#fbbf24"},{l:"🛍쇼핑",v:fmt(m.shopping),c:"#a78bfa"},{l:"💝팁",v:fmt(m.tip),c:"#34d399"},{l:"📤지출",v:fmt(m.expense),c:"#f87171"},eurRate?{l:"순수익₩",v:fmt(m.net*eurRate,"KRW"),c:"#34d399"}:null].filter(Boolean).map(({l,v,c})=><div key={l} style={{background:"rgba(10,22,40,0.4)",borderRadius:8,padding:"6px 10px"}}>
-              <div style={{fontSize:10,color:"var(--sub)",marginBottom:2}}>{l}</div>
-              <div style={{fontSize:12,fontWeight:700,color:c}}>{v}</div>
             </div>)}
           </div>
-        </div>)}
-      </div>}
-      {statTab==="tour"&&<div style={chartCard}>
-        <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>투어별 평균 수익</div>
-        {tourRank.length===0&&<div style={{color:"var(--sub)",fontSize:13,textAlign:"center",padding:20}}>데이터 없음</div>}
-        {tourRank.map((t,i)=><div key={t.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
-          <div style={{flex:1,marginRight:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"#475569",fontWeight:700,minWidth:16}}>#{i+1}</span><span style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{t.name}</span></div>
-            <div style={{fontSize:10,color:"var(--sub)",marginLeft:22}}>{t.count}회 · {t.pax}명</div>
-          </div>
+          {sc.bonus>0&&<div style={{background:"rgba(245,158,11,0.1)",borderRadius:8,padding:"6px 10px",display:"flex",justifyContent:"space-between",marginBottom:6}}>
+            <span style={{fontSize:11,color:"#fbbf24"}}>⭐ 보너스</span>
+            <span style={{fontSize:11,color:"#fbbf24",fontWeight:700}}>+{sc.bonus}점</span>
+          </div>}
+          {pax>0&&<div style={{background:"rgba(0,0,0,0.2)",borderRadius:8,padding:"8px 10px"}}>
+            <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>👤 인당 순수익 비교</div>
+            <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+              <div><div style={{fontSize:9,color:"#475569"}}>이번</div><div style={{fontSize:13,fontWeight:700,color:"#34d399"}}>{fmt(Math.round(pn))}</div></div>
+              {sc.avgPN>0&&<div><div style={{fontSize:9,color:"#475569"}}>평균</div><div style={{fontSize:13,fontWeight:700,color:"#94a3b8"}}>{fmt(Math.round(sc.avgPN))}</div></div>}
+              {bestPPVal>0&&<div><div style={{fontSize:9,color:"#475569"}}>🏅최고</div><div style={{fontSize:13,fontWeight:700,color:"#fbbf24"}}>{fmt(Math.round(bestPPVal))}</div></div>}
+              {effPPGoal>0&&<div><div style={{fontSize:9,color:"#475569"}}>🎯목표</div><div style={{fontSize:13,fontWeight:700,color:"#60a5fa"}}>{fmt(effPPGoal)}</div></div>}
+            </div>
+          </div>}
+        </div>}
+        <div style={{borderBottom:"1px solid var(--border)",padding:"11px 0",display:"flex",justifyContent:"space-between"}}>
+          <span style={{fontSize:13,color:"var(--sub)"}}>💼 일당</span>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:13,fontWeight:800,color:"#34d399"}}>{fmt(Math.round(t.net/t.count))}<span style={{fontSize:9,color:"var(--sub)"}}>/회</span></div>
-            <div style={{fontSize:10,color:"var(--sub)"}}>총 {fmt(t.net)}</div>
+            <div style={{fontSize:13,color:"#60a5fa",fontWeight:700}}>{fmt(detailRec.dailyWage||0)}</div>
+            {eurRate&&pf(detailRec.dailyWage)>0&&<div style={{fontSize:10,color:"var(--sub)"}}>{fmt(pf(detailRec.dailyWage)*eurRate,"KRW")}</div>}
           </div>
-        </div>)}
-      </div>}
-      {statTab==="daily"&&<div style={chartCard}>
-        <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:4}}>일당 수익 순위</div>
-        <div style={{fontSize:10,color:"#475569",marginBottom:12}}>순수익 ÷ 여행일수</div>
-        {dayRank.length===0&&<div style={{color:"var(--sub)",fontSize:13,textAlign:"center",padding:20}}>여행일수 입력된 데이터 없음</div>}
-        {dayRank.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
-          <div style={{flex:1,marginRight:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"#475569",fontWeight:700,minWidth:16}}>#{i+1}</span><span style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{d.name}</span></div>
-            <div style={{fontSize:10,color:"var(--sub)",marginLeft:22}}>{fmtDate(d.date)} · {d.days}일{d.pax?` · ${d.pax}명`:""}</div>
-          </div>
+        </div>
+        <DetailAcc title="⭐ 옵션 인센티브" total={tOpt(detailRec)} items={[...OPT.filter(i=>tog[i.key]!==false).map(i=>({...i,label:`${i.label}(${pf(detailRec[i.paxKey])||0}명×€${i.rate})`})),...(detailRec.extraOpt||[]).map(i=>({key:`x_${i.id}`,label:`⭐ ${i.label||"추가옵션"}`}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraOpt||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#fbbf24" accent="#d97706"/>
+        <DetailAcc title="🛍 쇼핑 인센티브" total={tShop(detailRec)} items={[...SHOP.filter(i=>shopTog[i.key]!==false),...(detailRec.extraShop||[]).map(i=>({key:`x_${i.id}`,label:`🛍 ${i.label||"추가쇼핑"}`}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraShop||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#a78bfa" accent="#7c3aed"/>
+        <DetailAcc title="💝 TIP / 기타" total={tTip(detailRec)} items={[{key:"tip",label:"💝 TIP"},...TIP_FIXED,...(detailRec.extraTip||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가항목"}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraTip||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#34d399" accent="#059669"/>
+        <DetailAcc title="📤 지출 / 경비" total={tExp(detailRec)} items={[...EXP,...(detailRec.extraExp||[]).map(i=>({key:`x_${i.id}`,label:i.label||"추가지출"}))]} rec={{...detailRec,...Object.fromEntries((detailRec.extraExp||[]).map(i=>[`x_${i.id}`,i.amount]))}} eurRate={eurRate} color="#f87171" accent="#dc2626"/>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:12,background:"linear-gradient(135deg,#1a3055,#1e293b)",borderRadius:14,padding:"14px 16px",border:"1px solid #2d4a6b"}}>
+          <span style={{fontSize:14,fontWeight:700,color:"#f1f5f9"}}>순수익</span>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:13,fontWeight:800,color:"#fbbf24"}}>{fmt(Math.round(d.perDay))}<span style={{fontSize:9,color:"var(--sub)"}}>/일</span></div>
-            <div style={{fontSize:10,color:"var(--sub)"}}>총 {fmt(d.net)}</div>
+            <div style={{fontSize:22,fontWeight:800,color:netEur(detailRec)>=0?"#34d399":"#f87171"}}>{fmt(netEur(detailRec))}</div>
+            {eurRate&&<div style={{fontSize:12,color:"#64748b"}}>{fmt(netEur(detailRec)*eurRate,"KRW")}</div>}
+            {detailRec.days&&pf(detailRec.days)>0&&<div style={{fontSize:11,color:"#64748b",marginTop:2}}>{fmt(Math.round(netEur(detailRec)/pf(detailRec.days)))}/일</div>}
           </div>
-        </div>)}
-      </div>}
-    </div>;
-  }
+        </div>
+        {detailRec.memo&&<div style={{marginTop:14,background:"var(--bg2)",borderRadius:12,padding:"12px 14px"}}><div style={{fontSize:11,color:"var(--sub)",marginBottom:5}}>메모</div><div style={{fontSize:13,color:"var(--text)",lineHeight:1.6}}>{detailRec.memo}</div></div>}
+        <button style={{width:"100%",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:12,padding:"14px",color:"#0f172a",fontSize:15,fontWeight:800,cursor:"pointer",marginTop:20}} onClick={()=>openEdit(detailRec)}>✏️ 수정하기</button>
+      </div>;
+    })()}
 
-  // ── Settings View ──
-  function SettingsView(){
-    return <div style={{padding:"14px 16px"}}>
+    {/* ══ STATS ══ */}
+    {view==="stats"&&(()=>{
+      const scoredRecs=[...records].filter(r=>parseInt(r.pax||0)>0&&pf(r.dailyWage)>0).sort((a,b)=>a.date.localeCompare(b.date)).map(r=>({...r,sc:calcScore(r,records,scoreCfg)})).filter(r=>r.sc);
+      const avgScore=scoredRecs.length?Math.round(scoredRecs.reduce((s,r)=>s+r.sc.total,0)/scoredRecs.length):0;
+      const bestRec=scoredRecs.reduce((b,r)=>!b||r.sc.total>b.sc.total?r:b,null);
+      const recentScores=scoredRecs.slice(-8);
+      const monthScores=months.slice(0,6).map(m=>{const recs=scoredRecs.filter(r=>monthKey(r.date)===m);const avg=recs.length?Math.round(recs.reduce((s,r)=>s+r.sc.total,0)/recs.length):0;return{label:`${parseInt(m.slice(5))}월`,value:avg,color:getGrade(avg).color};}).reverse();
+      const optEffTrend=scoredRecs.slice(-8).map(r=>({label:fmtDate(r.date).slice(5),value:r.sc.optEff,color:r.sc.optEff>=100?"#34d399":r.sc.optEff>=70?"#fbbf24":"#f87171"}));
+      const pieData=[{label:"💼 일당",value:records.reduce((s,r)=>s+pf(r.dailyWage),0),color:"#60a5fa"},{label:"⭐ 옵션",value:records.reduce((s,r)=>s+tOpt(r),0),color:"#fbbf24"},{label:"🛍 쇼핑",value:records.reduce((s,r)=>s+tShop(r),0),color:"#a78bfa"},{label:"💝 팁/기타",value:records.reduce((s,r)=>s+tTip(r),0),color:"#34d399"}].filter(d=>d.value>0);
+      const totalPax=records.reduce((s,r)=>s+parseInt(r.pax||0),0);
+      const avgPPAll=totalPax>0?Math.round(records.reduce((s,r)=>s+netEur(r),0)/totalPax):0;
+      const thisYear=new Date().getFullYear();
+      const tyR=records.filter(r=>r.date?.startsWith(String(thisYear)));
+      const lyR=records.filter(r=>r.date?.startsWith(String(thisYear-1)));
+      const tyPax=tyR.reduce((s,r)=>s+parseInt(r.pax||0),0),lyPax=lyR.reduce((s,r)=>s+parseInt(r.pax||0),0);
+      const tyPP=tyPax>0?Math.round(tyR.reduce((s,r)=>s+netEur(r),0)/tyPax):0;
+      const lyPP=lyPax>0?Math.round(lyR.reduce((s,r)=>s+netEur(r),0)/lyPax):0;
+      const optC=["#fbbf24","#f59e0b","#d97706","#b45309"];
+      const shopC=["#a78bfa","#8b5cf6","#7c3aed","#6d28d9","#c4b5fd"];
+      const tipC=["#34d399","#10b981","#059669","#047857","#6ee7b7"];
+      const optPie=OPT.map((i,idx)=>({label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:optC[idx]})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
+      const shopPie=SHOP.map((i,idx)=>({label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:shopC[idx]})).filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
+      const tipPie=[{label:"💝 TIP",value:records.reduce((s,r)=>s+pf(r.tip),0),color:tipC[0]},...TIP_FIXED.map((i,idx)=>({label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:tipC[idx+1]}))].filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
+      const curPie=pieMode==="opt"?optPie:pieMode==="shop"?shopPie:pieMode==="tip"?tipPie:pieData;
+      const detailRows=[...OPT.map(i=>({cat:"⭐",label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:"#fbbf24"})),...SHOP.map(i=>({cat:"🛍",label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:"#a78bfa"})),...TIP_FIXED.map(i=>({cat:"💝",label:i.label,value:records.reduce((s,r)=>s+pf(r[i.key]),0),color:"#34d399"}))].filter(d=>d.value>0).sort((a,b)=>b.value-a.value);
+      const maxV=Math.max(...detailRows.map(d=>d.value),1);
+      const tourMap={};records.forEach(r=>{if(!tourMap[r.tourName])tourMap[r.tourName]={name:r.tourName,count:0,net:0,pax:0};tourMap[r.tourName].count++;tourMap[r.tourName].net+=netEur(r);tourMap[r.tourName].pax+=parseInt(r.pax||0);});
+      const tourRank=Object.values(tourMap).sort((a,b)=>b.net-a.net).slice(0,8);
+      const dayRank=records.filter(r=>pf(r.days||1)>0).map(r=>({date:r.date,name:r.tourName,days:pf(r.days||1),net:netEur(r),perDay:netEur(r)/pf(r.days||1),pax:r.pax})).sort((a,b)=>b.perDay-a.perDay).slice(0,8);
+      const mStats=months.slice(0,6).map(m=>{const recs=records.filter(r=>monthKey(r.date)===m);return{m,count:recs.length,pax:recs.reduce((s,r)=>s+parseInt(r.pax||0),0),wage:recs.reduce((s,r)=>s+pf(r.dailyWage),0),option:recs.reduce((s,r)=>s+tOpt(r),0),shopping:recs.reduce((s,r)=>s+tShop(r),0),tip:recs.reduce((s,r)=>s+tTip(r),0),expense:recs.reduce((s,r)=>s+tExp(r),0),net:recs.reduce((s,r)=>s+netEur(r),0)};});
+      return <div style={{padding:"12px 14px",paddingBottom:90}}>
+        <div style={{fontSize:16,fontWeight:800,color:"var(--text)",marginBottom:12}}>📈 수익 통계</div>
+        <div style={{display:"flex",gap:5,marginBottom:14,background:"var(--bg3)",borderRadius:10,padding:4}}>
+          {["overview","score","monthly","tour","daily"].map(t=><button key={t} style={tabBtn(t)} onClick={()=>setStatTab(t)}>{t==="overview"?"개요":t==="score"?"성과점수":t==="monthly"?"월별":t==="tour"?"투어별":"일단위"}</button>)}
+        </div>
+        {statTab==="overview"&&<>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+            <div style={{...chartCard,marginBottom:0,textAlign:"center"}}>
+              <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>👤 인당 평균</div>
+              <div style={{fontSize:18,fontWeight:800,color:"#34d399"}}>{fmt(avgPPAll)}</div>
+              {eurRate&&<div style={{fontSize:10,color:"var(--sub)"}}>{fmt(avgPPAll*eurRate,"KRW")}</div>}
+              {bestPPVal>0&&<div style={{marginTop:6,paddingTop:6,borderTop:"1px solid var(--border)"}}>
+                <div style={{fontSize:9,color:"#fbbf24"}}>🏅 최고기록</div>
+                <div style={{fontSize:14,fontWeight:800,color:"#fbbf24"}}>{fmt(Math.round(bestPPVal))}</div>
+                <div style={{fontSize:9,color:"var(--sub)"}}>{bestPP?.tourName?.slice(0,8)}</div>
+              </div>}
+            </div>
+            <div style={{...chartCard,marginBottom:0,textAlign:"center"}}>
+              <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>📅 연간 인당 평균</div>
+              <div style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{thisYear}년: {fmt(tyPP)}</div>
+              <div style={{fontSize:11,color:"var(--sub)"}}>{thisYear-1}년: {fmt(lyPP)}</div>
+              {tyPP>lyPP&&lyPP>0?<div style={{fontSize:10,color:"#34d399",marginTop:2}}>▲ {fmt(tyPP-lyPP)} 성장</div>:tyPP<lyPP&&tyPP>0?<div style={{fontSize:10,color:"#f87171",marginTop:2}}>▼ {fmt(lyPP-tyPP)} 감소</div>:<div style={{fontSize:10,color:"#475569",marginTop:2}}>전년 데이터 없음</div>}
+            </div>
+          </div>
+          <div style={chartCard}>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:10}}>수입 항목별 비율</div>
+            <div style={{display:"flex",gap:5,marginBottom:12,flexWrap:"wrap"}}>
+              {[{id:"category",label:"전체",color:"#f59e0b"},{id:"opt",label:"⭐ 옵션",color:"#fbbf24"},{id:"shop",label:"🛍 쇼핑",color:"#a78bfa"},{id:"tip",label:"💝 팁",color:"#34d399"}].map(({id,label,color})=><button key={id} onClick={()=>setPieMode(id)} style={{padding:"4px 10px",borderRadius:20,fontSize:10,fontWeight:600,cursor:"pointer",border:`1px solid ${pieMode===id?color:"var(--border)"}`,background:pieMode===id?color+"22":"transparent",color:pieMode===id?color:"var(--sub)"}}>{label}</button>)}
+            </div>
+            <PieChart data={curPie}/>
+          </div>
+          <div style={chartCard}><div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>월별 순수익 추이</div><BarChart data={chartData}/></div>
+          <div style={chartCard}>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:14}}>수입 세부 항목 비교</div>
+            {detailRows.map((d,i)=><div key={i} style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:9,color:"var(--sub)",background:"var(--bg3)",borderRadius:4,padding:"1px 5px"}}>{d.cat}</span>
+                  <span style={{fontSize:12,color:"var(--text)",fontWeight:600}}>{d.label}</span>
+                </div>
+                <span style={{fontSize:13,fontWeight:700,color:d.color}}>{fmt(d.value)}</span>
+              </div>
+              <div style={{background:"var(--bg3)",borderRadius:4,height:5,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.round(d.value/maxV*100)}%`,background:d.color,borderRadius:4}}/></div>
+            </div>)}
+          </div>
+        </>}
+        {statTab==="score"&&<>
+          <div style={chartCard}>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>🏆 종합 성과</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+              <div style={{background:"var(--bg3)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>전체 평균 점수</div>
+                <div style={{fontSize:24,fontWeight:800,color:getGrade(avgScore).color}}>{avgScore}점</div>
+                <div style={{fontSize:11,color:getGrade(avgScore).color}}>{getGrade(avgScore).emoji} {getGrade(avgScore).label}</div>
+              </div>
+              <div style={{background:"var(--bg3)",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+                <div style={{fontSize:10,color:"var(--sub)",marginBottom:4}}>평가 투어</div>
+                <div style={{fontSize:24,fontWeight:800,color:"#60a5fa"}}>{scoredRecs.length}</div>
+                <div style={{fontSize:11,color:"var(--sub)"}}>건</div>
+              </div>
+            </div>
+            {bestRec&&<div style={{background:"rgba(245,158,11,0.1)",borderRadius:10,padding:"10px 12px",border:"1px solid rgba(245,158,11,0.3)"}}>
+              <div style={{fontSize:10,color:"#fbbf24",marginBottom:4}}>🌟 최고 점수 투어</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div><div style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{bestRec.tourName}</div><div style={{fontSize:11,color:"var(--sub)"}}>{fmtDate(bestRec.date)}</div></div>
+                <ScoreBadge score={bestRec.sc.total} size="lg"/>
+              </div>
+            </div>}
+          </div>
+          <div style={chartCard}>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>📈 최근 점수 추이</div>
+            {recentScores.length>0?<>
+              <BarChart data={recentScores.map(r=>({label:fmtDate(r.date).slice(5),value:r.sc.total,color:getGrade(r.sc.total).color}))}/>
+              <div style={{marginTop:12}}>
+                {recentScores.map(r=><div key={r.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:"1px solid var(--border)"}}>
+                  <div><span style={{fontSize:12,color:"var(--text)",fontWeight:600}}>{r.tourName}</span><span style={{fontSize:10,color:"var(--sub)",marginLeft:6}}>{fmtDate(r.date)}</span></div>
+                  <ScoreBadge score={r.sc.total}/>
+                </div>)}
+              </div>
+            </>:<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 부족 (인원·일당 입력 필요)</div>}
+          </div>
+          <div style={chartCard}><div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>📅 월별 평균 점수</div>{monthScores.some(d=>d.value>0)?<BarChart data={monthScores}/>:<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 없음</div>}</div>
+          <div style={chartCard}>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:4}}>⭐ 옵션 효율 추이</div>
+            <div style={{fontSize:10,color:"var(--sub)",marginBottom:12}}>최대 가능 대비 달성률 (%)</div>
+            {optEffTrend.length>0?<><BarChart data={optEffTrend}/><div style={{display:"flex",justifyContent:"center",gap:12,marginTop:8}}>{[{c:"#34d399",l:"100%↑"},{c:"#fbbf24",l:"70~99%"},{c:"#f87171",l:"70%미만"}].map(({c,l})=><div key={l} style={{display:"flex",alignItems:"center",gap:4}}><div style={{width:8,height:8,borderRadius:2,background:c}}/><span style={{fontSize:10,color:"var(--sub)"}}>{l}</span></div>)}</div></>:<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 없음</div>}
+          </div>
+          <div style={chartCard}>
+            <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>📊 지표별 평균</div>
+            {scoredRecs.length>0?[{label:"옵션 효율",val:`${Math.round(scoredRecs.reduce((s,r)=>s+r.sc.optEff,0)/scoredRecs.length)}%`,color:"#fbbf24",desc:"최대 가능 대비 달성률"},{label:"인당 쇼핑",val:fmt(Math.round(scoredRecs.reduce((s,r)=>s+r.sc.perPaxShop,0)/scoredRecs.length)),color:"#a78bfa",desc:"1인당 쇼핑 인센티브"},{label:"부수입 배율",val:`${(scoredRecs.reduce((s,r)=>s+r.sc.mult,0)/scoredRecs.length).toFixed(1)}배`,color:"#60a5fa",desc:"일당 대비 옵션+쇼핑+팁"},{label:"인당 순수익",val:fmt(Math.round(scoredRecs.reduce((s,r)=>s+r.sc.perPaxNet,0)/scoredRecs.length)),color:"#34d399",desc:"1인당 순수익"}].map(({label,val,color,desc})=><div key={label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:"1px solid var(--border)"}}>
+              <div><div style={{fontSize:13,color:"var(--text)",fontWeight:600}}>{label}</div><div style={{fontSize:10,color:"var(--sub)"}}>{desc}</div></div>
+              <div style={{fontSize:16,fontWeight:800,color}}>{val}</div>
+            </div>):<div style={{textAlign:"center",color:"var(--sub)",padding:20,fontSize:12}}>데이터 없음</div>}
+          </div>
+        </>}
+        {statTab==="monthly"&&<div style={chartCard}>
+          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>월별 상세 비교</div>
+          {mStats.length===0&&<div style={{color:"var(--sub)",fontSize:13,textAlign:"center",padding:20}}>데이터 없음</div>}
+          {mStats.map(m=><div key={m.m} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid var(--border)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{parseInt(m.m.slice(5))}월 {m.m.slice(0,4)}</span>
+              <span style={{fontSize:14,fontWeight:800,color:m.net>=0?"#34d399":"#f87171"}}>{fmt(m.net)}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {[{l:"투어수",v:`${m.count}건`,c:"var(--sub)"},{l:"인원",v:`${m.pax}명`,c:"var(--sub)"},{l:"💼일당",v:fmt(m.wage),c:"#60a5fa"},{l:"⭐옵션",v:fmt(m.option),c:"#fbbf24"},{l:"🛍쇼핑",v:fmt(m.shopping),c:"#a78bfa"},{l:"💝팁",v:fmt(m.tip),c:"#34d399"},{l:"📤지출",v:fmt(m.expense),c:"#f87171"},eurRate?{l:"순수익₩",v:fmt(m.net*eurRate,"KRW"),c:"#34d399"}:null].filter(Boolean).map(({l,v,c})=><div key={l} style={{background:"rgba(10,22,40,0.4)",borderRadius:8,padding:"6px 10px"}}>
+                <div style={{fontSize:10,color:"var(--sub)",marginBottom:2}}>{l}</div>
+                <div style={{fontSize:12,fontWeight:700,color:c}}>{v}</div>
+              </div>)}
+            </div>
+          </div>)}
+        </div>}
+        {statTab==="tour"&&<div style={chartCard}>
+          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:12}}>투어별 평균 수익</div>
+          {tourRank.length===0&&<div style={{color:"var(--sub)",fontSize:13,textAlign:"center",padding:20}}>데이터 없음</div>}
+          {tourRank.map((t,i)=><div key={t.name} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+            <div style={{flex:1,marginRight:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"#475569",fontWeight:700,minWidth:16}}>#{i+1}</span><span style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{t.name}</span></div>
+              <div style={{fontSize:10,color:"var(--sub)",marginLeft:22}}>{t.count}회 · {t.pax}명</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#34d399"}}>{fmt(Math.round(t.net/t.count))}<span style={{fontSize:9,color:"var(--sub)"}}>/회</span></div>
+              <div style={{fontSize:10,color:"var(--sub)"}}>총 {fmt(t.net)}</div>
+            </div>
+          </div>)}
+        </div>}
+        {statTab==="daily"&&<div style={chartCard}>
+          <div style={{fontSize:12,color:"var(--sub)",fontWeight:600,marginBottom:4}}>일당 수익 순위</div>
+          <div style={{fontSize:10,color:"#475569",marginBottom:12}}>순수익 ÷ 여행일수</div>
+          {dayRank.length===0&&<div style={{color:"var(--sub)",fontSize:13,textAlign:"center",padding:20}}>여행일수 입력된 데이터 없음</div>}
+          {dayRank.map((d,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:"1px solid var(--border)"}}>
+            <div style={{flex:1,marginRight:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"#475569",fontWeight:700,minWidth:16}}>#{i+1}</span><span style={{fontSize:12,fontWeight:700,color:"var(--text)"}}>{d.name}</span></div>
+              <div style={{fontSize:10,color:"var(--sub)",marginLeft:22}}>{fmtDate(d.date)} · {d.days}일{d.pax?` · ${d.pax}명`:""}</div>
+            </div>
+            <div style={{textAlign:"right"}}>
+              <div style={{fontSize:13,fontWeight:800,color:"#fbbf24"}}>{fmt(Math.round(d.perDay))}<span style={{fontSize:9,color:"var(--sub)"}}>/일</span></div>
+              <div style={{fontSize:10,color:"var(--sub)"}}>총 {fmt(d.net)}</div>
+            </div>
+          </div>)}
+        </div>}
+      </div>;
+    })()}
+
+    {/* ══ SETTINGS ══ */}
+    {view==="settings"&&<div style={{padding:"14px 16px"}}>
       <div style={{fontSize:16,fontWeight:800,color:"var(--text)",marginBottom:16}}>⚙️ 설정</div>
       <div style={{background:"var(--card)",borderRadius:14,padding:"14px 16px",border:"1px solid var(--border)",marginBottom:12}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -1022,24 +1026,16 @@ function App(){
       <div style={{background:"var(--card)",borderRadius:14,padding:"14px 16px",border:"1px solid var(--border)"}}>
         <div style={{fontSize:14,fontWeight:700,color:"var(--text)",marginBottom:8}}>ℹ️ 앱 정보</div>
         <div style={{fontSize:12,color:"var(--sub)",lineHeight:1.8}}>
-          <div>🌍 Emre 계산기 v5.0</div>
+          <div>🌍 Emre 계산기 v5.1</div>
+          <div>🔧 v5.1: 입력 시 Accordion 닫힘 버그 수정</div>
           <div>🔒 모든 데이터는 이 기기에만 저장</div>
           <div>💱 환율: 유럽중앙은행 기준 (1일 1회)</div>
           <div>🏆 점수: 최근 {scoreCfg.movingN}개 이동평균 기준</div>
           <div>🎯 목표: {goalMode==="auto"?`자동 (성장률 ${growthRate}%)`:"수동 설정"}</div>
         </div>
       </div>
-    </div>;
-  }
+    </div>}
 
-  // ── 최종 렌더 ──
-  return <div style={{background:"var(--bg)",minHeight:"100vh",color:"var(--text)",maxWidth:430,margin:"0 auto",paddingBottom:80}}>
-    <Header/>
-    {view==="list"&&<ListView/>}
-    {view==="add"&&<AddView/>}
-    {view==="detail"&&<DetailView/>}
-    {view==="stats"&&<StatsView/>}
-    {view==="settings"&&<SettingsView/>}
     {isLL&&<button style={{position:"fixed",bottom:70,right:"calc(50% - 200px)",background:"linear-gradient(135deg,#f59e0b,#d97706)",border:"none",borderRadius:28,width:52,height:52,fontSize:24,color:"#0f172a",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(245,158,11,0.4)",zIndex:99}} onClick={openAdd}>＋</button>}
     <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:"100%",maxWidth:430,background:"var(--bg)",borderTop:"1px solid var(--border)",display:"flex",zIndex:100}}>
       {[{id:"list",icon:"📋",label:"기록"},{id:"stats",icon:"📈",label:"통계"},{id:"settings",icon:"⚙️",label:"설정"}].map(({id,icon,label})=>{
