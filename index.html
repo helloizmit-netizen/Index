@@ -472,7 +472,12 @@ function App(){
 
   const months=useMemo(()=>{const s=new Set(records.map(r=>monthKey(r.date)).filter(Boolean));return[...s].sort((a,b)=>b.localeCompare(a));},[records]);
   const stats=useMemo(()=>({net:filtered.reduce((s,r)=>s+netEur(r),0),wage:filtered.reduce((s,r)=>s+pf(r.dailyWage),0),option:filtered.reduce((s,r)=>s+tOpt(r),0),shopping:filtered.reduce((s,r)=>s+tShop(r),0),expense:filtered.reduce((s,r)=>s+tExp(r),0),pax:filtered.reduce((s,r)=>s+parseInt(r.pax||0),0),count:filtered.length}),[filtered]);
-  const thisMonth=monthKey(today());
+  // 이번달 기준: 가장 최근 투어 시작월 (5월 31일 시작 → 5월 성과)
+  const thisMonth=useMemo(()=>{
+    if(!records.length)return monthKey(today());
+    const latest=[...records].sort((a,b)=>b.date.localeCompare(a.date))[0];
+    return monthKey(latest.date);
+  },[records]);
   const thisMonthRecs=useMemo(()=>records.filter(r=>monthKey(r.date)===thisMonth),[records,thisMonth]);
   const thisMonthNet=thisMonthRecs.reduce((s,r)=>s+netEur(r),0);
   const thisMonthPax=thisMonthRecs.reduce((s,r)=>s+parseInt(r.pax||0),0);
@@ -544,7 +549,7 @@ function App(){
       ),
       (effMonthGoal>0||effPPGoal>0)&&h("div",{style:{margin:"10px 14px 0",background:"var(--card)",borderRadius:14,padding:"12px 14px",border:"1px solid var(--border)"}},
         h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
-          h("span",{style:{fontSize:11,color:"var(--sub)",fontWeight:600}},"🎯 이번달 목표 "+(goalMode==="auto"?"(자동)":"")),
+          h("span",{style:{fontSize:11,color:"var(--sub)",fontWeight:600}},"🎯 "+parseInt(thisMonth.slice(5))+"월 목표 "+(goalMode==="auto"?"(자동)":"")),
           h("span",{style:{fontSize:10,color:goalPct>=100?"#34d399":"#f59e0b",fontWeight:700}},goalPct+"%")
         ),
         effMonthGoal>0&&h(React.Fragment,null,
@@ -1103,6 +1108,7 @@ function App(){
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(h(App,null));
+
 </script>
 <script>
 if("serviceWorker"in navigator){
