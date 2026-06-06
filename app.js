@@ -183,10 +183,12 @@ function Toggle({on,onChange,color="#f59e0b"}){
   </div>;
 }
 
-function Accordion({title,total,color,accent,badge,children}){
-  const[open,setOpen]=useState(false);
+function Accordion({title,total,color,accent,badge,children,open:extOpen,onToggle}){
+  const[intOpen,setIntOpen]=useState(false);
+  const open=extOpen!==undefined?extOpen:intOpen;
+  const toggle=onToggle||(()=>setIntOpen(v=>!v));
   return <div style={{marginBottom:12}}>
-    <div onClick={()=>setOpen(v=>!v)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:open?"#1a2942":"var(--card)",border:`1px solid ${open?accent||"var(--border)":"var(--border)"}`,borderRadius:open?"12px 12px 0 0":"12px",padding:"12px 14px",cursor:"pointer"}}>
+    <div onClick={toggle} style={{display:"flex",justifyContent:"space-between",alignItems:"center",background:open?"#1a2942":"var(--card)",border:`1px solid ${open?accent||"var(--border)":"var(--border)"}`,borderRadius:open?"12px 12px 0 0":"12px",padding:"12px 14px",cursor:"pointer"}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}>
         <span style={{fontSize:13,fontWeight:700,color:"var(--text)"}}>{title}</span>
         {badge&&<span style={{fontSize:10,background:"rgba(128,128,128,0.15)",borderRadius:4,padding:"1px 6px",color:"var(--sub)"}}>{badge}</span>}
@@ -349,6 +351,8 @@ function App(){
   const[pieMode,setPieMode]=useState("category");
   const[showTemplates,setShowTemplates]=useState(false);
   const[scoreCfg,setScoreCfg]=useState(DEFAULT_SCORE_CFG);
+  const[accOpen,setAccOpen]=useState({wage:false,opt:false,shop:false,tip:false,exp:false});
+  function toggleAcc(key){setAccOpen(s=>({...s,[key]:!s[key]}));}
   const fileRef=useRef();
 
   useEffect(()=>{
@@ -384,8 +388,8 @@ function App(){
   }
 
   function setF(k){return v=>setForm(f=>({...f,[k]:v}));}
-  function openAdd(){setForm(emptyForm());setEditId(null);setView("add");setShowTemplates(false);}
-  function openEdit(rec){setForm({...emptyForm(),...rec,optToggle:{...defOptTog(),...(rec.optToggle||{})},shopToggle:{...defShopTog(),...(rec.shopToggle||{})}});setEditId(rec.id);setView("add");}
+  function openAdd(){setForm(emptyForm());setEditId(null);setView("add");setShowTemplates(false);setAccOpen({wage:false,opt:false,shop:false,tip:false,exp:false});}
+  function openEdit(rec){setForm({...emptyForm(),...rec,optToggle:{...defOptTog(),...(rec.optToggle||{})},shopToggle:{...defShopTog(),...(rec.shopToggle||{})}});setEditId(rec.id);setView("add");setAccOpen({wage:false,opt:false,shop:false,tip:false,exp:false});}
   function copyRecord(rec){setForm({...emptyForm(),...rec,date:today(),memo:""});setEditId(null);setView("add");toast("복사 완료 — 날짜 확인 후 저장하세요");}
   function saveTemplate(){if(!form.tourName){toast("투어명을 입력해주세요","err");return;}setTemplates(t=>[{id:Date.now(),name:form.tourName,data:{...form,date:today(),memo:""}},...t.slice(0,9)]);toast(`"${form.tourName}" 템플릿 저장 ✓`);}
   function loadTemplate(t){setForm({...t.data,date:today()});setShowTemplates(false);toast(`"${t.name}" 불러오기 ✓`);}
@@ -633,10 +637,10 @@ function App(){
         <div><label style={{fontSize:11,color:"#a78bfa",fontWeight:600,display:"block",marginBottom:5}}>📅 여행 일수</label><input type="number" inputMode="numeric" style={{...inp,borderColor:pf(form.days)>1?"#7c3aed":"var(--border)"}} placeholder="1" value={form.days} onChange={e=>setF("days")(e.target.value)}/></div>
       </div>
       <TotalBar/>
-      <Accordion title="💼 일당" total={pf(form.dailyWage)} color="#60a5fa" accent="#1d4ed8" badge="Day Wage">
+      <Accordion title="💼 일당" total={pf(form.dailyWage)} color="#60a5fa" accent="#1d4ed8" badge="Day Wage" open={accOpen.wage} onToggle={()=>toggleAcc("wage")}>
         <InputRow label="일당 (€)" value={form.dailyWage} onChange={setF("dailyWage")} color="#60a5fa"/>
       </Accordion>
-      <Accordion title="⭐ 옵션 인센티브" total={tOpt(form)} color="#fbbf24" accent="#d97706" badge="Option">
+      <Accordion title="⭐ 옵션 인센티브" total={tOpt(form)} color="#fbbf24" accent="#d97706" badge="Option" open={accOpen.opt} onToggle={()=>toggleAcc("opt")}>
         <div style={{fontSize:10,color:"var(--sub)",marginBottom:12}}>토글 OFF = 이번 투어 해당 없음 (점수 제외)</div>
         {OPT.map(item=>{
           const on=(form.optToggle||{})[item.key]!==false;
@@ -661,7 +665,7 @@ function App(){
           <ExtraItems items={form.extraOpt||[]} onChange={v=>setForm(f=>({...f,extraOpt:v}))} color="#fbbf24" withPax={true} addLabel="+ 옵션 추가"/>
         </div>
       </Accordion>
-      <Accordion title="🛍 쇼핑 인센티브" total={tShop(form)} color="#a78bfa" accent="#7c3aed" badge="Shopping">
+      <Accordion title="🛍 쇼핑 인센티브" total={tShop(form)} color="#a78bfa" accent="#7c3aed" badge="Shopping" open={accOpen.shop} onToggle={()=>toggleAcc("shop")}>
         <div style={{fontSize:10,color:"var(--sub)",marginBottom:12}}>토글 OFF = 이번 투어 해당 없음 (점수 제외)</div>
         {SHOP.map(item=>{
           const on=(form.shopToggle||{})[item.key]!==false;
@@ -680,7 +684,7 @@ function App(){
           <ExtraItems items={form.extraShop||[]} onChange={v=>setForm(f=>({...f,extraShop:v}))} color="#a78bfa" addLabel="+ 쇼핑 추가"/>
         </div>
       </Accordion>
-      <Accordion title="💝 TIP / 기타 수입" total={tTip(form)} color="#34d399" accent="#059669" badge="Tip">
+      <Accordion title="💝 TIP / 기타 수입" total={tTip(form)} color="#34d399" accent="#059669" badge="Tip" open={accOpen.tip} onToggle={()=>toggleAcc("tip")}>
         <InputRow label="💝 TIP (€)" value={form.tip} onChange={setF("tip")} color="#34d399"/>
         <div style={{borderTop:"1px dashed var(--border)",paddingTop:10,marginTop:2,marginBottom:8}}>
           <div style={{fontSize:10,color:"#34d399",marginBottom:8,fontWeight:600}}>기타 수입 항목</div>
@@ -688,7 +692,7 @@ function App(){
         </div>
         <ExtraItems items={form.extraTip||[]} onChange={v=>setForm(f=>({...f,extraTip:v}))} color="#34d399" addLabel="+ 항목 추가"/>
       </Accordion>
-      <Accordion title="📤 지출 / 경비" total={tExp(form)} color="#f87171" accent="#dc2626" badge="Expense">
+      <Accordion title="📤 지출 / 경비" total={tExp(form)} color="#f87171" accent="#dc2626" badge="Expense" open={accOpen.exp} onToggle={()=>toggleAcc("exp")}>
         {EXP.map(item=><InputRow key={item.key} label={item.label} value={form[item.key]} onChange={setF(item.key)} color="#f87171"/>)}
         <ExtraItems items={form.extraExp||[]} onChange={v=>setForm(f=>({...f,extraExp:v}))} color="#f87171" addLabel="+ 지출 추가"/>
       </Accordion>
